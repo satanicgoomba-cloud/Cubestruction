@@ -377,6 +377,65 @@ def pinball_popper(p):
     p.sphere((0, 0.21, 0.06), 0.034, RD, segs=10, rings=6)                          # plunger knob
 
 
+def boost_blaster(p):
+    """Stubby blaster with twin thruster nozzles at the back: the kick is the point."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.06, 0.05), (0.08, 0.26, 0.09), OR, bevel=0.03)                     # body
+    p.box((0, -0.2, -0.015), (0.035, 0.05, 0.09), DK, bevel=0.012, matrix=rot(x=10))  # front grip
+    p.cyl((0, -0.19, 0.055), (0, -0.36, 0.055), 0.05, CH, r2=0.065, segs=12, caps=False)  # wide short barrel
+    p.torus((0, -0.36, 0.055), 0.065, 0.011, YE, matrix=rot(x=90), segs=12, minor=3)
+    for x in (-0.045, 0.045):                                                       # thrusters
+        p.cyl((x, 0.08, 0.06), (x, 0.2, 0.06), 0.028, WH, r2=0.04, segs=10, caps=False)
+        p.cyl((x, 0.19, 0.06), (x, 0.205, 0.06), 0.038, GR, segs=10)
+    p.box((0, 0.12, 0.11), (0.03, 0.12, 0.02), LI, bevel=0.008)                       # top rail
+
+
+def ripple_disc(p):
+    """Disc launcher: a drum of saw-discs on top, a slot barrel in front."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.06, 0.04), (0.06, 0.28, 0.07), WH, bevel=0.025)                     # body
+    p.box((0, -0.3, 0.05), (0.13, 0.22, 0.025), PU, bevel=0.01)                       # flat slot barrel
+    p.box((0, -0.41, 0.05), (0.15, 0.02, 0.035), CH, bevel=0.006)
+    p.cyl((0, -0.04, 0.085), (0, -0.04, 0.13), 0.085, SK, segs=16)                    # disc drum
+    p.torus((0, -0.04, 0.13), 0.085, 0.008, CH, segs=16, minor=3)
+    p.cyl((0, -0.04, 0.13), (0, -0.04, 0.145), 0.075, PU, segs=16)                    # top disc
+    p.sphere((0, -0.04, 0.15), 0.018, YE, segs=8, rings=4)                            # hub
+    p.box((0, 0.17, 0.03), (0.05, 0.14, 0.06), SK, bevel=0.02)                        # stock
+
+
+def bloom_mortar(p):
+    """Shoulder mortar with a flower-petal muzzle."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    tz = 0.1
+    p.cyl((0, 0.3, tz), (0, -0.34, tz), 0.07, LI, segs=14, caps=False)                # tube
+    p.cyl((0, 0.3, tz), (0, 0.36, tz), 0.075, WH, segs=14)                            # breech cap
+    p.box((0, -0.16, -0.02), (0.035, 0.05, 0.1), DK, bevel=0.012, matrix=rot(x=10))   # front grip
+    p.torus((0, -0.34, tz), 0.072, 0.012, CH, matrix=rot(x=90), segs=14, minor=3)
+    for i in range(6):                                                                # petals
+        a = 2 * math.pi * i / 6
+        x, z = 0.085 * math.cos(a), tz + 0.085 * math.sin(a)
+        p.box((x, -0.38, z), (0.05, 0.08, 0.012), RD if i % 2 else OR, bevel=0.006,
+              matrix=rot(y=math.degrees(a) + 90, x=-25))
+    p.box((0.085, 0.0, tz + 0.04), (0.03, 0.12, 0.05), AQ, bevel=0.012)               # sight
+
+
+def boing_pad(p):
+    """Bounce pad, origin at the bottom centre: a base, springs, a squishy top."""
+    p.cyl((0, 0, 0), (0, 0, 0.06), 0.42, WH, segs=20)                                 # base
+    p.torus((0, 0, 0.06), 0.4, 0.025, CH, segs=20, minor=4)
+    for i in range(4):                                                                # springs
+        a = 2 * math.pi * i / 4 + math.pi / 4
+        x, y = 0.24 * math.cos(a), 0.24 * math.sin(a)
+        for k in range(3):
+            p.torus((x, y, 0.09 + k * 0.035), 0.04, 0.008, CH, segs=8, minor=3)
+    p.cyl((0, 0, 0.18), (0, 0, 0.24), 0.4, LI, r2=0.36, segs=20)                       # cushion
+    p.sphere((0, 0, 0.24), 0.36, LI, segs=20, rings=4, scale=(1, 1, 0.12))
+    p.torus((0, 0, 0.23), 0.3, 0.015, YE, segs=20, minor=3)
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -385,7 +444,8 @@ TOOLS = {
     "RocketLauncher": rocket_launcher, "BlackHoleGrenade": black_hole_grenade,
     "SonicHammer": sonic_hammer, "NukeCrate": nuke_crate, "GrappleHook": grapple_hook,
     "Jetpack": jetpack, "RocketBoots": rocket_boots, "ClimbingGloves": climbing_gloves,
-    "PinballPopper": pinball_popper,
+    "PinballPopper": pinball_popper, "BoostBlaster": boost_blaster, "RippleDisc": ripple_disc,
+    "BloomMortar": bloom_mortar, "BoingPad": boing_pad,
 }
 
 

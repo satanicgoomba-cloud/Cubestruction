@@ -43,6 +43,14 @@ namespace Cubestruction.Tools
             if (t != null) FireBullets(t, origin, dir, seed, owner, false, scale);
         }
 
+        /// <summary>Local-only blast (bomblets): every peer pops its own copy, so no RPC.</summary>
+        public void LocalBlast(Vector3 pos, float radiusM, Color c)
+        {
+            StartCoroutine(Bubble(pos, Mathf.Max(radiusM * 1.4f, 0.4f), c, 0.3f));
+            Burst(pos, 12, c);
+            if (Time.time >= _impactSfxAt) { _impactSfxAt = Time.time + 0.04f; Play(boomClip, pos, 0.35f, Random.Range(1.3f, 1.7f)); }
+        }
+
         /// <summary>Local-only impact puff (each peer simulates its own bullets, so no RPC).</summary>
         public void BulletImpact(Vector3 pos, ToolDef t, bool authority)
         {

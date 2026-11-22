@@ -62,10 +62,34 @@ namespace Cubestruction
         public float bulletSize;   // visual radius, m
         public float lifeS;        // seconds before it fizzles
         public bool automatic;     // hold to keep firing even with a cooldown above 0.12 s
+        public string bulletShape; // "" = ball, "disc" = flat spinning disc that re-arms its pierce after each ricochet
+        public float selfRecoil;   // m/s pushed back along the aim when fired (Boost Blaster: rocket-jump without rockets)
+        public int splitCount;     // on first impact the shell bursts into this many bouncing bomblets
+        public float splitDamage, splitRadiusCells; public int splitBounces;
+        [NonSerialized] public bool popOnEnd;   // bomblets: bounce harmlessly, explode when spent
+        [NonSerialized] ToolDef _split;
+
+        /// <summary>The bomblet a splitting shell turns into (derived once from the shell's split* fields).</summary>
+        public ToolDef SplitDef
+        {
+            get
+            {
+                if (splitCount <= 0) return null;
+                if (_split == null)
+                {
+                    _split = (ToolDef)MemberwiseClone();
+                    _split.damage = splitDamage; _split.radiusCells = splitRadiusCells; _split.bounces = splitBounces;
+                    _split.splitCount = 0; _split.pellets = 1; _split.pierceCells = 0; _split.gravity = 1f;
+                    _split.restitution = 0.55f; _split.bulletSize = 0.06f; _split.lifeS = 2.5f; _split.popOnEnd = true;
+                    _split._split = null;
+                }
+                return _split;
+            }
+        }
 
         [NonSerialized] public int index;
         [NonSerialized] public ToolCategory cat;
-        public bool IsExplosive => cat == ToolCategory.Throwable || cat == ToolCategory.Placed || id == "RocketLauncher";
+        public bool IsExplosive => (cat == ToolCategory.Throwable || cat == ToolCategory.Placed || id == "RocketLauncher") && id != "BoingPad";
         public bool IsContinuous => cooldown <= 0.12f;
         public bool IsProjectile => cat == ToolCategory.Gun && speed > 0;
     }

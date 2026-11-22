@@ -20,6 +20,7 @@ namespace Cubestruction.Tools
             public Vector3 pos, vel;
             public int bouncesLeft, pierceLeft;
             public float life, scale;
+            public System.Random rng;     // per-bullet, seeded from the volley: splits match on every peer
             public ulong owner;
             public bool authority;
             public Transform visual;
@@ -54,6 +55,7 @@ namespace Cubestruction.Tools
                 }
                 var b = new Bullet
                 {
+                    rng = new System.Random(seed * 31 + i),
                     def = t, pos = origin, vel = d * t.speed * scale,
                     bouncesLeft = t.bounces, pierceLeft = t.pierceCells,
                     life = t.lifeS > 0 ? t.lifeS : 3f, scale = scale, owner = owner, authority = authority,
@@ -85,9 +87,48 @@ namespace Cubestruction.Tools
                     alive = Step(b, step, cube);
                 }
                 b.life -= dt;
-                if (!alive || b.life <= 0 || b.pos.y < -20f) { Release(b); _live.RemoveAt(i); continue; }
+                if (!alive || b.life <= 0 || b.pos.y < -20f)
+                {
+                    if (b.def.popOnEnd && b.pos.y > -20f) Pop(b);
+                    Release(b); _live.RemoveAt(i); continue;
+                }
                 b.visual.position = b.pos;
+                if (b.def.bulletShape == "disc" && b.vel.sqrMagnitude > 0.01f)
+                    b.visual.rotation = Quaternion.LookRotation(b.vel) * Quaternion.Euler(0, Time.time * 1440f % 360f, 0);
             }
+            if (_spawn.Count > 0) { _live.AddRange(_spawn); _spawn.Clear(); }
+        }
+
+        readonly List<Bullet> _spawn = new List<Bullet>();
+
+        /// <summary>A shell bursts into bouncing bomblets (same seeded directions on every peer).</summary>
+        void Split(Bullet b, Vector3 point, Vector3 normal)
+        {
+            var child = b.def.SplitDef;
+            for (int i = 0; i < b.def.splitCount && _live.Count + _spawn.Count < MaxLive; i++)
+            {
+                var r = new Vector3((float)b.rng.NextDouble() * 2 - 1, (float)b.rng.NextDouble() * 2 - 1, (float)b.rng.NextDouble() * 2 - 1);
+                var dir = (normal * 1.3f + r).normalized;
+                float speed = (5f + (float)b.rng.NextDouble() * 4f) * b.scale;
+                var c = new Bullet
+                {
+                    def = child, pos = point + normal * 0.05f, vel = dir * speed, bouncesLeft = child.bounces,
+                    life = child.lifeS + (float)b.rng.NextDouble() * 0.6f, scale = b.scale, owner = b.owner,
+                    authority = b.authority, rng = new System.Random(b.rng.Next()),
+                };
+                c.visual = Get(child, b.scale); c.visual.position = c.pos;
+                c.trail = c.visual.GetComponent<TrailRenderer>(); c.trail.Clear();
+                _spawn.Add(c);
+            }
+        }
+
+        /// <summary>A bomblet pops: explosive damage (falloff to zero) on the server copy, a blast for everyone.</summary>
+        void Pop(Bullet b)
+        {
+            var cube = VoxelCube.Instance;
+            if (b.authority && cube && cube.IsSpawned)
+                cube.ServerDamage(b.pos, b.def.radiusCells, b.def.damage, b.def.tier, true, b.owner);
+            FxHub.Instance?.LocalBlast(b.pos, b.def.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, BulletColor(b.def));
         }
 
         /// <summary>Advances one bullet by dt. Returns false when it is spent.</summary>
@@ -116,9 +157,13 @@ namespace Cubestruction.Tools
             if (!hit) { b.pos += move; return true; }
 
             Impacts++;
-            if (isVoxel && b.authority && cube.IsSpawned)
-                cube.ServerDamage(cube.CellToWorld(cell), t.radiusCells, t.damage, t.tier, false, b.owner);
-            FxHub.Instance?.BulletImpact(point, t, b.authority);
+            if (!t.popOnEnd)   // bomblets only bounce; they damage when they pop
+            {
+                if (isVoxel && b.authority && cube.IsSpawned)
+                    cube.ServerDamage(cube.CellToWorld(cell), t.radiusCells, t.damage, t.tier, false, b.owner);
+                FxHub.Instance?.BulletImpact(point, t, b.authority);
+            }
+            if (t.splitCount > 0) { Split(b, point, normal); return false; }
 
             if (isVoxel && b.pierceLeft > 0)
             {
@@ -134,8 +179,10 @@ namespace Cubestruction.Tools
                 float keep = t.restitution > 0 ? t.restitution : 0.6f;
                 b.vel = Vector3.Reflect(b.vel, normal) * keep;
                 b.pos = point + normal * 0.02f;
+                if (t.bulletShape == "disc") b.pierceLeft = t.pierceCells;   // discs slice again after each ricochet
                 return true;
             }
+            b.pos = point;
             return false;
         }
 
@@ -143,7 +190,8 @@ namespace Cubestruction.Tools
         {
             var tr = _pool.Count > 0 ? _pool.Pop() : Create();
             tr.gameObject.SetActive(true);
-            tr.localScale = Vector3.one * t.bulletSize * 2f * scale;
+            tr.localScale = (t.bulletShape == "disc" ? new Vector3(2f, 0.35f, 2f) : Vector3.one * 2f) * t.bulletSize * scale;
+            tr.rotation = Quaternion.identity;
             var col = BulletColor(t);
             var block = new MaterialPropertyBlock();
             block.SetColor("_BaseColor", col);
@@ -187,6 +235,9 @@ namespace Cubestruction.Tools
                 case "Minigun": return new Color(0.55f, 0.95f, 1f, 0.9f);
                 case "Shotgun": return new Color(1f, 0.82f, 0.35f, 0.95f);
                 case "RailGun": return new Color(0.8f, 1f, 1f, 1f);
+                case "RippleDisc": return new Color(0.75f, 0.55f, 1f, 0.95f);
+                case "BoostBlaster": return new Color(1f, 0.55f, 0.3f, 0.95f);
+                case "BloomMortar": return t.popOnEnd ? new Color(1f, 0.45f, 0.75f, 0.95f) : new Color(1f, 0.9f, 0.4f, 1f);
                 case "PinballPopper":
                     // each ball a different candy colour
                     float h = Random.value;

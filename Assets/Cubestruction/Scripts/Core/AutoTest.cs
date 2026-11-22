@@ -188,14 +188,14 @@ namespace Cubestruction
 
             // ---- physics guns: each must fire bullets that hit, ricochet and dig (fired from 3 m off the +Z face)
             var front = cube.Center + Vector3.forward * cube.HalfExtent;
-            foreach (var (gunId, seconds, pulse) in new[] { ("Minigun", 3f, false), ("PinballPopper", 3f, false), ("Shotgun", 3f, true), ("RailGun", 3f, true) })
+            foreach (var (gunId, seconds, pulse) in new[] { ("Minigun", 3f, false), ("PinballPopper", 3f, false), ("Shotgun", 3f, true), ("RailGun", 3f, true), ("RippleDisc", 3f, true), ("BloomMortar", 3.5f, true) })
             {
                 var gun = Balance.Tool(gunId);
                 me.ownedTools.Value |= 1UL << gun.index;
                 me.Tools.SelectTool(gun.index);
                 me.Motor.Teleport(new Vector3(front.x, cube.transform.position.y + 0.2f, front.z + 3f), 180f);
                 _aim = Quaternion.Euler(0, 180, 0);
-                _pitch = gunId == "RailGun" ? 0f : -8f;   // lob slightly up so ricochets have room
+                _pitch = gunId == "RailGun" ? 0f : gunId == "BloomMortar" ? -25f : -8f;   // lob up a little; the mortar arcs
                 yield return new WaitForSeconds(0.3f);
                 int v0 = cube.alive.Value, f0 = Tools.Bullets.Fired, i0 = Tools.Bullets.Impacts, b0 = Tools.Bullets.Bounces;
                 _holdUse = true; _pulseUse = pulse;
@@ -210,6 +210,49 @@ namespace Cubestruction
                 if (gun.bounces > 0) Check(bounces > 0, $"{gun.name} bullets ricochet");
             }
             _pitch = 0f;
+
+            // ---- movement weapons, out on the open platform behind the -X face
+            var open = new Vector3(cube.Center.x - cube.HalfExtent - 3.5f, cube.transform.position.y + 0.2f, cube.Center.z);
+            {
+                var boost = Balance.Tool("BoostBlaster");
+                me.ownedTools.Value |= 1UL << boost.index;
+                me.Tools.SelectTool(boost.index);
+                me.Motor.Teleport(open, 0f);
+                _aim = Quaternion.identity; _pitch = 89f;   // straight down
+                yield return new WaitForSeconds(0.4f);
+                float yStart = me.transform.position.y, yMax = yStart;
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false;
+                for (float tt = 0; tt < 1.2f; tt += Time.deltaTime) { yMax = Mathf.Max(yMax, me.transform.position.y); yield return null; }
+                Check(yMax - yStart > 1.5f, $"Boost Blaster fired at the floor launches you ({yMax - yStart:0.0} m up)");
+                yield return new WaitForSeconds(1.5f);
+            }
+            {
+                var pad = Balance.Tool("BoingPad");
+                while (me.charges.Count <= pad.index) me.charges.Add(0);
+                me.charges[pad.index] = 3;
+                yield return null;
+                me.Tools.SelectTool(pad.index);
+                me.Motor.Teleport(open, 0f);
+                _aim = Quaternion.identity; _pitch = 55f;   // at the floor ~1.5 m ahead
+                yield return new WaitForSeconds(0.4f);
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false; _pitch = 0f;
+                yield return new WaitForSeconds(0.6f);
+                Tools.ExplosiveProjectile placed = null;
+                foreach (var e in Tools.ExplosiveProjectile.Live) if (e.IsPad) placed = e;
+                Check(placed != null, "Boing Pad can be placed");
+                if (placed != null)
+                {
+                    me.Motor.Teleport(placed.transform.position + Vector3.up * 0.15f, 0f);
+                    float vy = 0;
+                    for (float tt = 0; tt < 0.8f; tt += Time.deltaTime) { vy = Mathf.Max(vy, me.Motor.Velocity.y); yield return null; }
+                    Check(vy > 10f, $"stepping on a Boing Pad launches you ({vy:0.0} m/s up)");
+                    yield return new WaitForSeconds(2.5f);
+                }
+            }
 
             // ---- God Siege, solo: the one player becomes the God
             var mm = MatchManager.Instance;

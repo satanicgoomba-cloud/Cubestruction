@@ -27,7 +27,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Shovel",
@@ -54,7 +60,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "ClimbingGloves",
@@ -81,7 +93,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Grenade",
@@ -108,7 +126,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "SledgeHammer",
@@ -135,7 +159,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "StickyBomb",
@@ -162,7 +192,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "GrappleHook",
@@ -189,7 +225,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Drill",
@@ -216,7 +258,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Dynamite",
@@ -243,7 +291,46 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
+    },
+    {
+      "id": "BoingPad",
+      "name": "Boing Pad",
+      "category": "Placed",
+      "price": 600,
+      "consumable": true,
+      "stack": 3,
+      "damage": 0,
+      "radiusCells": 0,
+      "cooldown": 0.5,
+      "tier": 0,
+      "twoHanded": false,
+      "rangeM": 0,
+      "fuse": 60,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 18,
+      "desc": "Place it, step on it, fly. Lasts a minute. 3 per pack.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Shotgun",
@@ -270,7 +357,46 @@
       "spreadDeg": 7,
       "bulletSize": 0.05,
       "lifeS": 1.6,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
+    },
+    {
+      "id": "BoostBlaster",
+      "name": "Boost Blaster",
+      "category": "Gun",
+      "price": 2200,
+      "consumable": false,
+      "stack": 0,
+      "damage": 18,
+      "radiusCells": 0.75,
+      "cooldown": 0.8,
+      "tier": 2,
+      "twoHanded": true,
+      "rangeM": 20,
+      "fuse": 0,
+      "pellets": 6,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Two-handed. The kick launches you: blast the floor to fly, or fire mid-swing for speed.",
+      "speed": 50,
+      "gravity": 0.4,
+      "bounces": 1,
+      "restitution": 0.6,
+      "spreadDeg": 9,
+      "bulletSize": 0.05,
+      "lifeS": 1.2,
+      "automatic": false,
+      "selfRecoil": 13,
+      "bulletShape": "",
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "MiningLaser",
@@ -297,7 +423,46 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
+    },
+    {
+      "id": "RippleDisc",
+      "name": "Ripple Disc",
+      "category": "Gun",
+      "price": 4500,
+      "consumable": false,
+      "stack": 0,
+      "damage": 40,
+      "radiusCells": 0.75,
+      "cooldown": 0.4,
+      "tier": 3,
+      "twoHanded": false,
+      "rangeM": 40,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 1,
+      "knockback": 0,
+      "desc": "Saw-discs that slice a voxel, ricochet, and slice again. Five bounces each.",
+      "speed": 32,
+      "gravity": 0,
+      "bounces": 5,
+      "restitution": 0.97,
+      "spreadDeg": 0,
+      "bulletSize": 0.14,
+      "lifeS": 4,
+      "automatic": false,
+      "bulletShape": "disc",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "RocketBoots",
@@ -324,7 +489,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "TNT",
@@ -351,7 +522,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Jackhammer",
@@ -378,7 +555,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "C4",
@@ -405,7 +588,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Detonator",
@@ -432,7 +621,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Jetpack",
@@ -459,7 +654,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "Minigun",
@@ -486,7 +687,13 @@
       "spreadDeg": 2.0,
       "bulletSize": 0.045,
       "lifeS": 2.0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "PinballPopper",
@@ -513,7 +720,46 @@
       "spreadDeg": 3,
       "bulletSize": 0.11,
       "lifeS": 6,
-      "automatic": true
+      "automatic": true,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
+    },
+    {
+      "id": "BloomMortar",
+      "name": "Bloom Mortar",
+      "category": "Gun",
+      "price": 9500,
+      "consumable": false,
+      "stack": 0,
+      "damage": 90,
+      "radiusCells": 1.2,
+      "cooldown": 1.2,
+      "tier": 4,
+      "twoHanded": true,
+      "rangeM": 60,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Two-handed. Lob a shell that bursts into eight bouncing bomblets.",
+      "speed": 20,
+      "gravity": 1.0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0.12,
+      "lifeS": 6,
+      "automatic": false,
+      "splitCount": 8,
+      "splitDamage": 80,
+      "splitRadiusCells": 1.8,
+      "splitBounces": 2,
+      "bulletShape": "",
+      "selfRecoil": 0
     },
     {
       "id": "PlasmaCutter",
@@ -540,7 +786,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "RocketLauncher",
@@ -567,7 +819,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "SonicHammer",
@@ -594,7 +852,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "RailGun",
@@ -621,7 +885,13 @@
       "spreadDeg": 0,
       "bulletSize": 0.07,
       "lifeS": 1.0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "BlackHoleGrenade",
@@ -648,7 +918,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     },
     {
       "id": "NukeCrate",
@@ -675,7 +951,13 @@
       "spreadDeg": 0,
       "bulletSize": 0,
       "lifeS": 0,
-      "automatic": false
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0
     }
   ]
 }

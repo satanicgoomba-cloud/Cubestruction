@@ -274,7 +274,8 @@ namespace Cubestruction.Tools
                         RayRpc(t.index, ray.origin, ray.direction, Random.Range(1, int.MaxValue));
                         FxHub.Instance?.LocalTracer(ray.origin, RaycastWorld(ray, t.rangeM, out var p) ? p : ray.origin + ray.direction * t.rangeM, t);
                     }
-                    if (t.knockback > 0 && !_avatar.IsVR) _motor.AddImpulse(-ray.direction * t.knockback * 0.15f);   // recoil
+                    if (t.selfRecoil > 0) _motor.AddImpulse(-ray.direction * t.selfRecoil * scale);   // Boost Blaster: fly
+                    else if (t.knockback > 0 && !_avatar.IsVR) _motor.AddImpulse(-ray.direction * t.knockback * 0.15f);   // recoil
                     // carry the leftover so rapid fire keeps its real rate instead of snapping to whole frames
                     h.cooldown = Mathf.Max(h.cooldown, -t.cooldown) + t.cooldown;
                     Haptic(h, t.twoHanded ? 0.7f : 0.4f);

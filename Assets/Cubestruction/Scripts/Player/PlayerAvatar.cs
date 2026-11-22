@@ -154,6 +154,16 @@ namespace Cubestruction.Player
             else Motor.Teleport(position, yaw);
         }
 
+        /// <summary>Server -> owner: Boing Pad. Sets the upward speed (keeps horizontal momentum), never ragdolls.</summary>
+        [Rpc(SendTo.Owner)]
+        public void LaunchRpc(Vector3 velocity)
+        {
+            if (Motor.IsGrappling) return;
+            var v = Motor.Velocity;
+            Motor.Velocity = new Vector3(v.x, Mathf.Max(v.y, 0f), v.z);
+            Motor.AddImpulse(velocity);
+        }
+
         /// <summary>Server -> owner: explosion knockback. Big hits ragdoll the player.</summary>
         [Rpc(SendTo.Owner)]
         public void KnockbackRpc(Vector3 velocity)

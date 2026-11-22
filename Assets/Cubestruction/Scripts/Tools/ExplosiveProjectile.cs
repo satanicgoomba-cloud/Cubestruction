@@ -8,7 +8,8 @@ namespace Cubestruction.Tools
 {
     /// <summary>
     /// Grenades, goo bombs, pop sticks, vortex orbs, rockets, fizzy barrels (TNT), pixel charges (C4)
-    /// and the sunburst crate. Server-simulated rigidbody; clients see it through NetworkTransform.
+    /// and the sunburst crate, plus the Boing Pad (no blast: launches players who step on it).
+    /// Server-simulated rigidbody; clients see it through NetworkTransform.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(NetworkObject))]
     public class ExplosiveProjectile : NetworkBehaviour
@@ -26,6 +27,8 @@ namespace Cubestruction.Tools
         int _pulsesLeft;
         float _pulseTimer;
         GameObject _visual;
+        readonly Dictionary<ulong, float> _padReady = new Dictionary<ulong, float>();
+        public bool IsPad => Def != null && Def.id == "BoingPad";
 
         void Awake() { _rb = GetComponent<Rigidbody>(); }
 
@@ -62,7 +65,7 @@ namespace Cubestruction.Tools
         void Update()
         {
             // blinking warning light speeds up as the fuse burns (everyone sees it)
-            if (_visual && !float.IsInfinity(fuseLeft.Value))
+            if (_visual && !float.IsInfinity(fuseLeft.Value) && !IsPad)
             {
                 float f = fuseLeft.Value;
                 float rate = f < 2 ? 14 : f < 5 ? 6 : 2;
@@ -88,6 +91,7 @@ namespace Cubestruction.Tools
                 return;
             }
             fuseLeft.Value -= Time.deltaTime;
+            if (t.id == "BoingPad") { TickPad(t); if (fuseLeft.Value <= 0) Finish(); return; }   // expires quietly
             if (fuseLeft.Value <= 0 && _pulsesLeft == 0) ServerExplode();
         }
 
@@ -103,6 +107,23 @@ namespace Cubestruction.Tools
                 // stick to players too: ride along with them
                 var pl = c.collider.GetComponentInParent<PlayerAvatar>();
                 if (pl) transform.SetParent(null, true);
+            }
+        }
+
+        /// <summary>Boing Pad: anyone standing on it gets launched straight up (knockback = launch speed).</summary>
+        void TickPad(ToolDef t)
+        {
+            var top = transform.position;
+            foreach (var pl in PlayerAvatar.All)
+            {
+                if (pl.role.Value == PlayerRole.God) continue;
+                var d = pl.transform.position - top;
+                float s = pl.Motor.WorldScale;
+                if (new Vector2(d.x, d.z).magnitude > 0.85f || d.y < -0.4f || d.y > 0.9f * s) continue;
+                if (_padReady.TryGetValue(pl.OwnerClientId, out var at) && Time.time < at) continue;
+                _padReady[pl.OwnerClientId] = Time.time + 0.6f;
+                pl.LaunchRpc(Vector3.up * t.knockback * s);
+                FxHub.Instance?.ShockwaveRpc(top, 0.8f);
             }
         }
 
