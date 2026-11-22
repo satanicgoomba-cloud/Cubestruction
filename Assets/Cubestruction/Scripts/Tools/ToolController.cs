@@ -338,7 +338,8 @@ namespace Cubestruction.Tools
         {
             if (!_avatar.IsVR) return;
             var dev = h.isLeft ? UnityEngine.InputSystem.XR.XRController.leftHand : UnityEngine.InputSystem.XR.XRController.rightHand;
-            dev?.ExecuteCommand(UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.05f));
+            var cmd = UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.05f);
+            dev?.ExecuteCommand(ref cmd);
         }
 
         // ------------------------------------------------------------------ server RPCs (validated)

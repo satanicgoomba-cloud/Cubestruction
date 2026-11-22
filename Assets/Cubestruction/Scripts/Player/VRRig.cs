@@ -199,7 +199,8 @@ namespace Cubestruction.Player
         static void Haptic(HandState h, float amp)
         {
             var dev = h.IsLeft ? UnityEngine.InputSystem.XR.XRController.leftHand : UnityEngine.InputSystem.XR.XRController.rightHand;
-            dev?.ExecuteCommand(UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.08f));
+            var cmd = UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.08f);
+            dev?.ExecuteCommand(ref cmd);
         }
 
         // ------------------------------------------------------------------ locomotion

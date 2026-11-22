@@ -168,7 +168,8 @@ namespace Cubestruction.Siege
         static void Haptic(bool left, float amp)
         {
             var dev = left ? UnityEngine.InputSystem.XR.XRController.leftHand : UnityEngine.InputSystem.XR.XRController.rightHand;
-            dev?.ExecuteCommand(UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.06f));
+            var cmd = UnityEngine.InputSystem.XR.Haptics.SendHapticImpulseCommand.Create(0, amp, 0.06f);
+            dev?.ExecuteCommand(ref cmd);
         }
 
         // ------------------------------------------------------------------ desktop fallback
