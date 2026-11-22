@@ -48,8 +48,8 @@ namespace Cubestruction.Player
             // after a killstreak view (Raptor / Heli) hands control back, and the hands are already under the head
             _avatar.rightHand.SetParent(_avatar.headAnchor, false);
             _avatar.leftHand.SetParent(_avatar.headAnchor, false);
-            _avatar.rightHand.localPosition = new Vector3(0.28f, -0.25f, 0.45f);
-            _avatar.leftHand.localPosition = new Vector3(-0.28f, -0.25f, 0.45f);
+            _avatar.rightHand.localPosition = new Vector3(0.22f, -0.19f, 0.42f);
+            _avatar.leftHand.localPosition = new Vector3(-0.22f, -0.19f, 0.42f);
             _avatar.rightHand.localRotation = _avatar.leftHand.localRotation = Quaternion.identity;
 
             var camGo = new GameObject("Flat Camera");
@@ -126,6 +126,7 @@ namespace Cubestruction.Player
             transform.Rotate(0, look.x, 0, Space.World);
             _pitch = Mathf.Clamp(_pitch - look.y, -85f, 85f);
             _avatar.headAnchor.localRotation = Quaternion.Euler(_pitch, 0, 0);
+            AimHands();
 
             // ---- move
             Vector2 mv = Vector2.ClampMagnitude(_move.ReadValue<Vector2>() + MobileInput.Move, 1f);
@@ -186,6 +187,29 @@ namespace Cubestruction.Player
                 return true;
             }
             return false;
+        }
+
+        /// <summary>Point the view-model hands (and the tools in them) at whatever is under the crosshair, so
+        /// barrels line up with the centre of the screen and shots travel straight into it.</summary>
+        void AimHands()
+        {
+            if (!Cam) return;
+            float s = _motor.WorldScale;
+            var ray = AimRay;
+            float dist = 40f * s;
+            if (Physics.Raycast(ray, out var hit, dist, ~(1 << 5), QueryTriggerInteraction.Ignore)) dist = hit.distance;
+            var cube = VoxelCube.Instance;
+            if (cube && cube.Raycast(ray, dist, out _, out var vp)) dist = Mathf.Min(dist, Vector3.Distance(ray.origin, vp));
+            var target = ray.GetPoint(Mathf.Clamp(dist, 2.5f * s, 40f * s));
+            foreach (var hand in new[] { _avatar.rightHand, _avatar.leftHand })
+            {
+                var dir = target - hand.position;
+                if (dir.sqrMagnitude < 1e-4f) continue;
+                // the tool socket is tilted down for VR controllers; cancel that so the barrel itself points at the target
+                var socket = hand.Find("Socket");
+                var tilt = socket ? socket.localRotation : Quaternion.identity;
+                hand.rotation = Quaternion.LookRotation(dir, _avatar.headAnchor.up) * Quaternion.Inverse(tilt);
+            }
         }
 
         /// <summary>Ray from the centre of the screen.</summary>

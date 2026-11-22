@@ -359,7 +359,19 @@ namespace Cubestruction
                 var camPos = me.headAnchor.position;
                 var mz = Tools.ToolController.LastMuzzle;
                 var local = me.headAnchor.InverseTransformPoint(mz);
-                Check(local.z > 0.5f && local.y < -0.08f, $"bullets spawn at the barrel end (muzzle {local.x:0.00}, {local.y:0.00}, {local.z:0.00} from the eye)");
+                Check(local.z > 0.5f && local.y < 0.05f && local.x > 0.05f, $"bullets spawn at the barrel end (muzzle {local.x:0.00}, {local.y:0.00}, {local.z:0.00} from the eye)");
+                {
+                    // the barrel points where the crosshair is (no more shots climbing up the screen)
+                    var socket = me.rightHand.Find("Socket");
+                    var cam = Camera.main;
+                    var aimRay = new Ray(cam.transform.position, cam.transform.forward);
+                    float d = Physics.Raycast(aimRay, out var ah, 40f, ~(1 << 5), QueryTriggerInteraction.Ignore) ? ah.distance : 40f;
+                    if (cube.Raycast(aimRay, d, out _, out var avp)) d = Mathf.Min(d, Vector3.Distance(aimRay.origin, avp));
+                    var target = aimRay.GetPoint(Mathf.Clamp(d, 2.5f, 40f));
+                    float off = socket ? Vector3.Angle(socket.forward, target - socket.position) : 99f;
+                    Check(off < 4f, $"guns point at the crosshair ({off:0.0}° off)");
+                    Shot("flat_gun");
+                }
                 int v0 = cube.alive.Value, r0 = Tools.Bullets.Returns;
                 yield return FireAt("SawYoyo", 0.15f, true, -10f);
                 yield return new WaitForSeconds(1.5f);
