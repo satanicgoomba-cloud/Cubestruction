@@ -23,3 +23,15 @@
 *.blend2
 # Python
 __pycache__/
+# macOS
+._*
+.DS_Store
+# Output of Cubestruction > Build Everything (regenerate, don't commit)
+/Assets/Cubestruction/Generated/
+/Assets/Cubestruction/Generated.meta
+/Assets/Cubestruction/Scenes/
+/Assets/Cubestruction/Scenes.meta
+/Assets/Cubestruction/Resources/ToolVisuals/
+/Assets/Cubestruction/Resources/ToolVisuals.meta
+/Assets/Cubestruction/Resources/Materials/
+/Assets/Cubestruction/Resources/Materials.meta
