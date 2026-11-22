@@ -77,6 +77,42 @@ namespace Cubestruction.Player
 
             // Tell everyone how tall we are so our Buddy body is scaled to match our real height.
             Invoke(nameof(CalibrateHeight), 2f);
+
+            XRTracking.Recentered += OnRecentered;
+            _recenterPending = true;   // face the spawn direction whichever way the player is looking
+        }
+
+        bool _recenterPending;
+        Vector3? _alignFeet; float _alignYaw;
+
+        void OnRecentered() => _recenterPending = true;
+
+        /// <summary>Make the player's current view the body's forward, keeping them where they stand.</summary>
+        public void Recenter() => _recenterPending = true;
+
+        /// <summary>Place the player's head over <paramref name="feet"/>, looking along <paramref name="yaw"/>
+        /// (used for spawns and teleports, so VR players face the way the game intends).</summary>
+        public void AlignTo(Vector3 feet, float yaw)
+        {
+            _alignFeet = feet; _alignYaw = yaw;
+            _motor.Teleport(feet, yaw);   // immediate; refined once the head pose is known
+        }
+
+        void ApplyPendingAlignment()
+        {
+            if (!XRTracking.HasPose(_avatar.headAnchor)) return;
+            Vector3 feet; float yaw;
+            if (_alignFeet.HasValue) { feet = _alignFeet.Value; yaw = _alignYaw; }
+            else if (_recenterPending)
+            {
+                var h = _avatar.headAnchor.position;
+                feet = new Vector3(h.x, transform.position.y, h.z);
+                yaw = transform.eulerAngles.y;
+            }
+            else return;
+            XRTracking.AlignPose(transform, _avatar.headAnchor, feet, yaw, out var pos, out var rootYaw);
+            _motor.Teleport(pos, rootYaw);
+            _alignFeet = null; _recenterPending = false;
         }
 
         void CalibrateHeight()
@@ -113,11 +149,14 @@ namespace Cubestruction.Player
 
         void OnDisable()
         {
+            XRTracking.Recentered -= OnRecentered;
             if (Cam) Destroy(Cam.gameObject);
         }
 
         void Update()
         {
+            XRTracking.Tick();
+            ApplyPendingAlignment();
             float dt = Mathf.Max(Time.deltaTime, 1e-4f);
             foreach (var h in new[] { Left, Right })
             {

@@ -46,7 +46,7 @@ namespace Cubestruction.EditorTools
             if (general == null)
             {
                 // First time for this platform: create the per-target settings the XR Management UI would.
-                EditorBuildSettings.TryGetConfigObject(XRGeneralSettings.k_SettingsKey, out XRGeneralSettingsPerBuildTarget perTarget);
+                EditorBuildSettings.TryGetConfigObject(XRGeneralSettings.settingsKey, out XRGeneralSettingsPerBuildTarget perTarget);
                 if (perTarget == null) throw new System.Exception("XR Plug-in Management settings asset missing.");
                 general = ScriptableObject.CreateInstance<XRGeneralSettings>();
                 general.name = group + " Settings";

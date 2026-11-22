@@ -293,7 +293,7 @@ namespace Cubestruction.UI
 
         void BuildSettings()
         {
-            _settings = Screen_("Settings", new Vector2(900, 900));
+            _settings = Screen_("Settings", new Vector2(900, IsVR ? 980 : 900));
             var col = Column(_settings, 40, 10);
             Title(col, "Settings", 52);
             AeroTheme.Cycle(col, "VR movement", new[] { "Smooth", "Teleport", "Arm swing" }, () => (int)GameSettings.Locomotion, v => GameSettings.Locomotion = (VRLocomotion)v).Size(58);
@@ -307,7 +307,8 @@ namespace Cubestruction.UI
             AeroTheme.Cycle(col, "Look sensitivity", sens.Select(s => s + "x").ToArray(), () => Nearest(sens, GameSettings.LookSensitivity), v => GameSettings.LookSensitivity = sens[v]).Size(58);
             var heights = new[] { -0.3f, -0.2f, -0.1f, 0f, 0.1f, 0.2f, 0.3f };
             AeroTheme.Cycle(col, "VR height offset", heights.Select(h => (h >= 0 ? "+" : "") + h.ToString("0.0") + " m").ToArray(), () => Nearest(heights, GameSettings.HeightOffset), v => GameSettings.HeightOffset = heights[v]).Size(58);
-            AeroTheme.Label(col, "Movement/handedness changes apply next time you spawn.", 18).Size(28);
+            if (IsVR) AeroTheme.Button(col, "Recenter view", XRTracking.RequestRecenter, AeroPalette.SkyDeep).Size(58);
+            AeroTheme.Label(col, "Movement/handedness changes apply next time you spawn." + (IsVR ? " Holding the Meta button also recenters." : ""), 18).Size(28);
             AeroTheme.Button(col, "Done", () => { PlayerPrefs.Save(); _settingsOpen = false; }, AeroPalette.Lime).Size(64);
         }
 
@@ -772,7 +773,15 @@ namespace Cubestruction.UI
 
         void EnsureMenuCamera()
         {
-            if (Camera.main != null) { _menuCam = Camera.main; _menuRig = _menuCam.gameObject; return; }
+            if (IsVR)
+            {
+                // The flat menu's orbiting lobby camera isn't head-tracked; VR always gets its own rig
+                // (tracked head + laser-pointer hands), whatever camera the scene woke up first.
+                foreach (var lc in FindObjectsByType<Cubestruction.LobbyCamera>(FindObjectsInactive.Include))
+                    lc.gameObject.SetActive(false);
+                XRTracking.Recentered += () => { _menuRecenter = true; _wasMenuVisible = false; };
+            }
+            else if (Camera.main != null) { _menuCam = Camera.main; _menuRig = _menuCam.gameObject; return; }
             _menuRig = new GameObject("MenuRig");
             _menuRig.transform.position = new Vector3(0, 0, -14f);
             var camGo = new GameObject("MenuCamera");
@@ -838,9 +847,23 @@ namespace Cubestruction.UI
             }
         }
 
+        bool _menuRecenter = true;
+        static readonly Vector3 MenuRigSpot = new Vector3(0, 0, -14f);
+
         void UpdateVRPlacement(PlayerAvatar me)
         {
             if (!IsVR) return;
+            XRTracking.Tick();
+            if (_menuRecenter && _menuRig != null && _menuRig.activeInHierarchy && XRTracking.HasPose(_menuCam.transform))
+            {
+                // face the arena from the menu spot, whichever way the player is physically looking
+                float yaw = Quaternion.LookRotation(-MenuRigSpot.WithY0()).eulerAngles.y;
+                XRTracking.AlignPose(_menuRig.transform, _menuCam.transform, MenuRigSpot, yaw, out var pos, out var rootYaw);
+                _menuRig.transform.SetPositionAndRotation(pos, Quaternion.Euler(0, rootYaw, 0));
+                _menuRecenter = false;
+                _wasMenuVisible = false;   // snap the panel in front
+            }
+            if (_menuRecenter && me != null && me.IsSpawned) _menuRecenter = false;   // the player rig handles it
             Transform head = null; float scale = 1f;
             if (me != null && me.IsSpawned) { var vr = me.GetComponent<VRRig>(); if (vr != null && vr.Cam != null) head = vr.Cam.transform; scale = me.transform.localScale.x; }
             else if (_menuCam != null) head = _menuCam.transform;

@@ -149,7 +149,9 @@ namespace Cubestruction.Player
         public void TeleportRpc(Vector3 position, float yaw)
         {
             Ragdoll.Recover(true);
-            Motor.Teleport(position, yaw);
+            var vr = GetComponent<VRRig>();
+            if (vr != null && vr.enabled) vr.AlignTo(position, yaw);
+            else Motor.Teleport(position, yaw);
         }
 
         /// <summary>Server -> owner: explosion knockback. Big hits ragdoll the player.</summary>
