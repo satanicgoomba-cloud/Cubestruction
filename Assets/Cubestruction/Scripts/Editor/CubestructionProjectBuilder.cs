@@ -374,6 +374,10 @@ namespace Cubestruction.EditorTools
             var arena = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             arena.name = "SiegeArena"; arena.transform.position = new Vector3(0, -0.26f, 0); arena.transform.localScale = new Vector3(56, 0.25f, 56);
             arena.GetComponent<Renderer>().sharedMaterial = mats.pedestal;
+            // the cylinder primitive ships a CapsuleCollider, which at this flat scale becomes a 28 m sphere
+            // swallowing the play area; use the real disc shape instead
+            Object.DestroyImmediate(arena.GetComponent<Collider>());
+            arena.AddComponent<MeshCollider>();
 
             // decorative floating bubbles
             var bubbles = new GameObject("Bubbles").transform;

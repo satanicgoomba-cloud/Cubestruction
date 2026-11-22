@@ -25,7 +25,7 @@ namespace Cubestruction.Player
     public class FlatRig : MonoBehaviour
     {
         public float eyeHeight = 0.85f;
-        public float mouseSensitivity = 0.12f;
+        public float mouseSensitivity = 0.36f;
         public float stickSensitivity = 160f;
         public Camera Cam { get; private set; }
         public bool CursorFree { get; set; }

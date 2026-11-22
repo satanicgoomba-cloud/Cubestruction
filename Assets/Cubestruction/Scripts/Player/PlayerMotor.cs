@@ -139,8 +139,8 @@ namespace Cubestruction.Player
             }
             if ((flags & CollisionFlags.Above) != 0 && Velocity.y > 0) Velocity.y = 0;
 
-            // fell off the world: respawn on the pedestal edge
-            if (transform.position.y < -30f)
+            // fell off the arena (the meadow is 12 m down): respawn on the pedestal edge
+            if (transform.position.y < -8f)
             {
                 var cube = VoxelCube.Instance;
                 var p = cube ? cube.transform.position + Vector3.back * (cube.HalfExtent + 2.5f) : Vector3.up;
