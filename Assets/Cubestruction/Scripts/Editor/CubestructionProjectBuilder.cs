@@ -306,13 +306,13 @@ namespace Cubestruction.EditorTools
                 float size = u.id == "MegaBuddy" ? 2.2f : u.id == "BlockBrute" ? 1.4f : u.id == "CannonCart" ? 1.1f : 0.9f;
                 var col = go.AddComponent<CapsuleCollider>();
                 col.height = size; col.radius = size * 0.3f; col.center = new Vector3(0, size * 0.5f, 0);
-                go.AddComponent<NetworkTransform>();
-                go.AddComponent<NetworkRigidbody>();
+                go.AddComponent<NetworkTransform>();      // server-authoritative; EnemyUnit makes clients kinematic
                 go.AddComponent<EnemyUnit>();
                 var vis = new GameObject("Visual").transform;
                 vis.SetParent(go.transform, false);
                 var model = InstantiateModel($"Units/{u.id}", vis, PrimitiveType.Capsule, new Vector3(size * 0.6f, size * 0.5f, size * 0.6f));
                 model.name = "Model";
+                foreach (var c in model.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);   // capsule only
                 list.Add(SavePrefab(go, "Unit_" + u.id));
             }
             return list.ToArray();
