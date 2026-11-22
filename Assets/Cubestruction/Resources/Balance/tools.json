@@ -42,7 +42,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Shovel",
@@ -84,7 +89,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "ClimbingGloves",
@@ -126,7 +136,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "GooGun",
@@ -168,7 +183,12 @@
       "gooRadiusCells": 1.4,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Grenade",
@@ -210,7 +230,59 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
+    },
+    {
+      "id": "WarpKunai",
+      "name": "Warp Kunai",
+      "category": "Gun",
+      "price": 2500,
+      "consumable": false,
+      "stack": 0,
+      "damage": 10,
+      "radiusCells": 0.75,
+      "cooldown": 0.7,
+      "tier": 2,
+      "twoHanded": false,
+      "rangeM": 90,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Throw it and teleport to wherever it sticks. On a wall you hang right where it hit.",
+      "speed": 38,
+      "gravity": 0.4,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0.05,
+      "lifeS": 2.5,
+      "automatic": false,
+      "bulletShape": "torpedo",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": true,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "SledgeHammer",
@@ -252,7 +324,59 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
+    },
+    {
+      "id": "BubbleWand",
+      "name": "Bubble Wand",
+      "category": "Gun",
+      "price": 3000,
+      "consumable": false,
+      "stack": 0,
+      "damage": 120,
+      "radiusCells": 3,
+      "cooldown": 0.8,
+      "tier": 2,
+      "twoHanded": false,
+      "rangeM": 40,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Blow big floaty bubbles: one that touches the cube pops everything inside it; touch one yourself to ride it up.",
+      "speed": 5,
+      "gravity": -0.15,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0.35,
+      "lifeS": 7,
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": true,
+      "returnS": 0,
+      "floatS": 3
     },
     {
       "id": "StickyBomb",
@@ -294,7 +418,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "GrappleHook",
@@ -336,7 +465,106 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
+    },
+    {
+      "id": "SawYoyo",
+      "name": "Saw Yo-yo",
+      "category": "Gun",
+      "price": 4000,
+      "consumable": false,
+      "stack": 0,
+      "damage": 40,
+      "radiusCells": 1.0,
+      "cooldown": 1.2,
+      "tier": 3,
+      "twoHanded": false,
+      "rangeM": 20,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Fling a saw that cuts out about 8 m and back to your hand, slicing everything on the way.",
+      "speed": 18,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0.12,
+      "lifeS": 3,
+      "automatic": false,
+      "bulletShape": "disc",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": true,
+      "explodeOnImpact": false,
+      "returnS": 0.9,
+      "floatS": 0
+    },
+    {
+      "id": "ChainWhip",
+      "name": "Chain Whip",
+      "category": "Gun",
+      "price": 5000,
+      "consumable": false,
+      "stack": 0,
+      "damage": 60,
+      "radiusCells": 1.8,
+      "cooldown": 0.6,
+      "tier": 3,
+      "twoHanded": false,
+      "rangeM": 9,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Lash anything within 9 m: rips a chunk out and yanks you toward it. Chain it with swinging.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 9,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Drill",
@@ -378,7 +606,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Dynamite",
@@ -420,7 +653,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "BoingPad",
@@ -462,7 +700,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Shotgun",
@@ -504,7 +747,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "BoostBlaster",
@@ -546,7 +794,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "MiningLaser",
@@ -588,7 +841,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RippleDisc",
@@ -630,7 +888,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "ChainZapper",
@@ -672,7 +935,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 8
+      "chainJumps": 8,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "FireworkLauncher",
@@ -714,7 +982,12 @@
       "gooRadiusCells": 0,
       "splitStars": true,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RocketBoots",
@@ -756,7 +1029,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "TNT",
@@ -798,7 +1076,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Jackhammer",
@@ -840,7 +1123,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "C4",
@@ -882,7 +1170,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Detonator",
@@ -924,7 +1217,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Jetpack",
@@ -966,7 +1264,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "Minigun",
@@ -1008,7 +1311,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "PinballPopper",
@@ -1050,7 +1358,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "BloomMortar",
@@ -1092,7 +1405,59 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
+    },
+    {
+      "id": "MagnetGlove",
+      "name": "Magnet Glove",
+      "category": "Gun",
+      "price": 9000,
+      "consumable": false,
+      "stack": 0,
+      "damage": 500,
+      "radiusCells": 1.6,
+      "cooldown": 0.8,
+      "tier": 4,
+      "twoHanded": false,
+      "rangeM": 8,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Hold to rip a chunk out of the cube and float it; let go to throw it as a wrecking ball.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "DrillTorpedo",
@@ -1134,7 +1499,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "PlasmaCutter",
@@ -1176,7 +1546,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "FrostRay",
@@ -1218,7 +1593,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": true,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RocketLauncher",
@@ -1260,7 +1640,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "SonicHammer",
@@ -1302,7 +1687,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RailGun",
@@ -1344,7 +1734,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "BlackHoleGrenade",
@@ -1386,7 +1781,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "NukeCrate",
@@ -1428,7 +1828,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RaptorLaptop",
@@ -1470,7 +1875,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "HeliGunner",
@@ -1512,7 +1922,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "RaptorMissile",
@@ -1554,7 +1969,12 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
     },
     {
       "id": "HeliGatling",
@@ -1596,7 +2016,59 @@
       "gooRadiusCells": 0,
       "splitStars": false,
       "freezes": false,
-      "chainJumps": 0
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": false,
+      "returnS": 0,
+      "floatS": 0
+    },
+    {
+      "id": "MagnetBoulder",
+      "name": "Boulder",
+      "category": "Hidden",
+      "price": 0,
+      "consumable": false,
+      "stack": 0,
+      "damage": 160,
+      "radiusCells": 2.6,
+      "cooldown": 0,
+      "tier": 4,
+      "twoHanded": false,
+      "rangeM": 0,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "(internal) a Magnet Glove throw.",
+      "speed": 28,
+      "gravity": 1.0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0.3,
+      "lifeS": 4,
+      "automatic": false,
+      "bulletShape": "",
+      "selfRecoil": 0,
+      "splitCount": 0,
+      "splitDamage": 0,
+      "splitRadiusCells": 0,
+      "splitBounces": 0,
+      "splitAfterS": 0,
+      "splitSpeed": 0,
+      "chainRangeCells": 0,
+      "burrowS": 0,
+      "burrowSpeed": 0,
+      "gooRadiusCells": 0,
+      "splitStars": false,
+      "freezes": false,
+      "chainJumps": 0,
+      "warpOnHit": false,
+      "carve": false,
+      "explodeOnImpact": true,
+      "returnS": 0,
+      "floatS": 0
     }
   ]
 }

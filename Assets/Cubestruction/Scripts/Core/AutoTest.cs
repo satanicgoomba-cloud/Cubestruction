@@ -260,6 +260,48 @@ namespace Cubestruction
                 yield return new WaitForSeconds(2f);
             }
 
+            // ---- Batch 2: physical / movement weapons at the -Z face
+            {
+                int w0 = Tools.Bullets.Warps;
+                var from = new Vector3(back.x, cube.transform.position.y + 0.2f, back.z - 3f);
+                yield return FireAt("WarpKunai", 0.15f, true, -35f);
+                float moved = Vector3.Distance(Tools.Bullets.LastWarp, from);
+                Check(Tools.Bullets.Warps > w0 && moved > 2f, $"Warp Kunai teleports you where it sticks ({moved:0.0} m)");
+            }
+            {
+                int v0 = cube.alive.Value;
+                yield return FireAt("ChainWhip", 1.3f, true, -15f);
+                Check(v0 - cube.alive.Value > 5, $"Chain Whip rips chunks out ({v0 - cube.alive.Value} voxels)");
+            }
+            {
+                int v0 = cube.alive.Value, r0 = Tools.Bullets.Returns;
+                yield return FireAt("SawYoyo", 0.15f, true, -10f);
+                yield return new WaitForSeconds(1.5f);
+                Check(v0 - cube.alive.Value > 3 && Tools.Bullets.Returns > r0, $"Saw Yo-yo cuts ({v0 - cube.alive.Value} voxels) and comes back");
+            }
+            {
+                int v0 = cube.alive.Value;
+                yield return FireAt("MagnetGlove", 0.7f, false, -10f);   // hold to grab, release to throw
+                yield return new WaitForSeconds(1f);
+                Check(v0 - cube.alive.Value > 20, $"Magnet Glove grabs and throws a chunk ({v0 - cube.alive.Value} voxels)");
+            }
+            {
+                int v0 = cube.alive.Value;
+                yield return FireAt("BubbleWand", 0.15f, true, -5f);
+                yield return new WaitForSeconds(1.5f);
+                Check(v0 - cube.alive.Value > 30, $"a bubble that touches the cube pops what's inside ({v0 - cube.alive.Value} voxels)");
+                // ride: a bubble drifting into you floats you up
+                me.Motor.Teleport(new Vector3(back.x, cube.transform.position.y + 0.2f, back.z - 7f), 0f);
+                yield return new WaitForSeconds(0.4f);
+                int r0 = Tools.Bullets.Rides;
+                var fwd = me.transform.forward;
+                Tools.FxHub.Instance.FireBullets(Balance.Tool("BubbleWand"), me.Motor.Chest + fwd * 2.2f, -fwd, 7, me.OwnerClientId, true, 1f);
+                float vy = 0;
+                for (float tt = 0; tt < 1.5f; tt += Time.deltaTime) { vy = Mathf.Max(vy, me.Motor.Velocity.y); yield return null; }
+                Check(Tools.Bullets.Rides > r0 && vy > 2f, $"touching a bubble floats you up ({vy:0.0} m/s)");
+                yield return new WaitForSeconds(3f);
+            }
+
             // ---- movement weapons, out on the open platform behind the -X face
             var open = new Vector3(cube.Center.x - cube.HalfExtent - 3.5f, cube.transform.position.y + 0.2f, cube.Center.z);
             {

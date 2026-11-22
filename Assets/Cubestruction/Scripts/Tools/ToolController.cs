@@ -51,7 +51,10 @@ namespace Cubestruction.Tools
             public LineRenderer line;
             public Vector3 lastTip; public bool tipInit;
             public bool throwArmed;
+            public bool magnetHeld, magnetPending; public GameObject magnetVis;   // Magnet Glove boulder
         }
+
+        bool _magnetHeldServer;
 
         void Awake()
         {
@@ -256,6 +259,14 @@ namespace Cubestruction.Tools
                     if (on && h.cooldown <= 0) { RayRpc(t.index, ray.origin, ray.direction, 0); h.cooldown = Mathf.Max(t.cooldown, 0.1f); Haptic(h, 0.1f); }
                     break;
                 }
+
+                case ToolCategory.Gun when t.id == "ChainWhip":
+                    if (pressed && h.cooldown <= 0) Whip(h, t, scale);
+                    break;
+
+                case ToolCategory.Gun when t.id == "MagnetGlove":
+                    Magnet(h, t, pressed, released, scale);
+                    break;
 
                 case ToolCategory.Gun:
                 {
@@ -488,6 +499,113 @@ namespace Cubestruction.Tools
             // volley was already simulated with authority when it fired)
             if (!IsOwner) fx.FireBullets(t, muzzle, dir, seed, OwnerClientId, true, scale);
             fx.BulletsRpc(tool, muzzle, dir, seed, OwnerClientId, scale);
+        }
+
+        // ------------------------------------------------------------------ Chain Whip / Magnet Glove (owner)
+
+        /// <summary>Chain Whip: lash a point up to rangeM away; the server rips a chunk out there and you
+        /// get yanked toward it (selfRecoil = pull speed).</summary>
+        void Whip(Hand h, ToolDef t, float scale)
+        {
+            h.cooldown = t.cooldown;
+            var ray = Aim(h, t);
+            var from = HandT(h).position;
+            if (!RaycastWorld(ray, t.rangeM * scale, out var p))
+            {
+                FxHub.Instance?.Whip(from, ray.origin + ray.direction * t.rangeM * scale, false);
+                return;
+            }
+            FxHub.Instance?.Whip(from, p, true);
+            WhipRpc(t.index, p, from);
+            var pull = (p - _motor.Chest).normalized * t.selfRecoil * scale;
+            _motor.AddImpulse(pull + Vector3.up * 2f * scale);
+            Haptic(h, 0.8f);
+            Swing(h);
+        }
+
+        /// <summary>Magnet Glove: press to rip a chunk out (server), hold to float it, release to throw it.</summary>
+        void Magnet(Hand h, ToolDef t, bool pressed, bool released, float scale)
+        {
+            if (pressed && !h.magnetHeld && !h.magnetPending && h.cooldown <= 0)
+            {
+                var ray = Aim(h, t);
+                if (RaycastWorld(ray, t.rangeM * scale, out var p)) { h.magnetPending = true; MagnetGrabRpc(t.index, p, h.isLeft); }
+                h.cooldown = 0.3f;
+            }
+            if (h.magnetHeld)
+            {
+                if (!h.magnetVis)
+                {
+                    h.magnetVis = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    Destroy(h.magnetVis.GetComponent<Collider>());
+                    h.magnetVis.GetComponent<MeshRenderer>().material.color = Bullets.BulletColor(Balance.Tool("MagnetBoulder"));
+                }
+                var ht = HandT(h);
+                h.magnetVis.transform.position = ht.position + ht.forward * 0.6f * scale + Vector3.up * Mathf.Sin(Time.time * 5f) * 0.03f;
+                h.magnetVis.transform.localScale = Vector3.one * 0.6f * scale;
+                h.magnetVis.transform.Rotate(30f * Time.deltaTime, 50f * Time.deltaTime, 0);
+                if (released || !h.trigger)
+                {
+                    var ray = Aim(h, t);
+                    var muzzle = h.magnetVis.transform.position;
+                    var aimPoint = RaycastWorld(ray, 80f, out var hp) ? hp : ray.origin + ray.direction * 80f;
+                    var dir = (aimPoint - muzzle).normalized;
+                    int seed = Random.Range(1, int.MaxValue);
+                    FxHub.Instance?.FireBullets(Balance.Tool("MagnetBoulder"), muzzle, dir, seed, OwnerClientId, IsServer, scale);
+                    MagnetThrowRpc(muzzle, dir, seed, scale);
+                    Destroy(h.magnetVis);
+                    h.magnetHeld = false;
+                    h.cooldown = t.cooldown;
+                    Haptic(h, 0.9f);
+                }
+            }
+        }
+
+        [Rpc(SendTo.Server)]
+        void WhipRpc(int tool, Vector3 point, Vector3 from)
+        {
+            var t = Balance.Tool(tool);
+            if (!ServerCheck(t, point, 1.5f) || t.id != "ChainWhip") return;
+            VoxelCube.Instance?.ServerDamage(point, t.radiusCells, t.damage, t.tier, false, OwnerClientId);
+            FxHub.Instance?.WhipRpc(from, point, OwnerClientId);
+        }
+
+        [Rpc(SendTo.Server)]
+        void MagnetGrabRpc(int tool, Vector3 point, bool left)
+        {
+            var t = Balance.Tool(tool);
+            bool ok = false;
+            if (ServerCheck(t, point, 1.5f) && t.id == "MagnetGlove" && !_magnetHeldServer)
+            {
+                var cube = VoxelCube.Instance;
+                int before = cube ? cube.alive.Value : 0;
+                cube?.ServerDamage(point, t.radiusCells, t.damage, t.tier, false, OwnerClientId);
+                ok = cube && cube.alive.Value < before;   // ripped something out
+                _magnetHeldServer = ok;
+                if (ok) FxHub.Instance?.ShockwaveRpc(point, 0.6f);
+            }
+            MagnetGrabbedRpc(ok, left);
+        }
+
+        [Rpc(SendTo.Owner)]
+        void MagnetGrabbedRpc(bool ok, bool left)
+        {
+            var h = left ? _left : _right;
+            h.magnetPending = false;
+            h.magnetHeld = ok;
+        }
+
+        [Rpc(SendTo.Server)]
+        void MagnetThrowRpc(Vector3 muzzle, Vector3 dir, int seed, float scale)
+        {
+            if (!_magnetHeldServer || float.IsNaN(dir.x)) return;
+            _magnetHeldServer = false;
+            if (Vector3.Distance(muzzle, _avatar.headAnchor.position) > 4f * Mathf.Max(1f, scale)) return;
+            var b = Balance.Tool("MagnetBoulder");
+            var fx = FxHub.Instance; if (!fx) return;
+            scale = Mathf.Clamp(scale, 0.1f, 10f);
+            if (!IsOwner) fx.FireBullets(b, muzzle, dir, seed, OwnerClientId, true, scale);
+            fx.BulletsRpc(b.index, muzzle, dir, seed, OwnerClientId, scale);
         }
 
         // ------------------------------------------------------------------ killstreaks

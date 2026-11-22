@@ -76,6 +76,11 @@ namespace Cubestruction
         public bool freezes;       // Frost Ray: turns voxels to glass instead of damaging them
         public float burrowS, burrowSpeed;   // Drill Torpedo: on impact, burrow forward this long at this speed
         public float gooRadiusCells;         // Boing Goo: blobs coat exposed voxels in this radius
+        public bool warpOnHit;     // Warp Kunai: the thrower teleports to where it sticks
+        public float returnS;      // Saw Yo-yo: flies out for half this time, then homes back to the hand
+        public bool carve;         // passes through voxels, digging along its path instead of colliding
+        public bool explodeOnImpact;   // boulders/bubbles: explosive-style damage where they land
+        public float floatS;       // Bubble Wand: a player who touches the bubble floats up for this long
         [NonSerialized] public bool popOnEnd;   // bomblets: bounce harmlessly, explode when spent
         [NonSerialized] ToolDef _split;
 

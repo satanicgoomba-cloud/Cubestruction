@@ -36,7 +36,8 @@ namespace Cubestruction.Tools
         const int MaxLive = 600;
 
         /// <summary>Counters for the -autotest smoke test.</summary>
-        public static int Fired, Impacts, Bounces;
+        public static int Fired, Impacts, Bounces, Returns, Warps, Rides;
+        public static Vector3 LastWarp;
 
         public int LiveCount => _live.Count;
 
@@ -148,6 +149,15 @@ namespace Cubestruction.Tools
         {
             var t = b.def;
             if (b.burrowing) return Burrow(b, dt, cube);
+            if (t.carve) return Carve(b, dt, cube);
+            if (t.floatS > 0 && b.age > 0.4f && TouchesLocalPlayer(b))
+            {
+                // Bubble Wand: whoever touches a bubble rides it up (each peer handles its own player)
+                PlayerAvatar.Local.Motor.Float(t.floatS);
+                Rides++;
+                FxHub.Instance?.LocalBlast(b.pos, 0.3f * b.scale, BulletColor(t));
+                return false;
+            }
             b.vel += Physics.gravity * t.gravity * b.scale * dt;
             var move = b.vel * dt;
             float dist = move.magnitude;
@@ -177,6 +187,31 @@ namespace Cubestruction.Tools
                 b.vel = dir * t.burrowSpeed * b.scale;
                 b.pos = point;
                 return true;
+            }
+            if (t.warpOnHit)
+            {
+                // Warp Kunai: the thrower blinks to where it struck (handled on the thrower's own client)
+                var me = PlayerAvatar.Local;
+                if (me != null && me.OwnerClientId == b.owner)
+                {
+                    float s = b.scale;
+                    var to = point + normal * 0.4f * s;
+                    if (normal.y < 0.5f) to -= Vector3.up * 0.6f * s;   // on a wall: hang with your head at the hit
+                    me.Motor.Teleport(to, me.transform.eulerAngles.y);
+                    Warps++; LastWarp = to;
+                }
+                FxHub.Instance?.LocalBlast(point, 0.35f * b.scale, BulletColor(t));
+                if (isVoxel && b.authority && cube.IsSpawned && t.damage > 0)
+                    cube.ServerDamage(cube.CellToWorld(cell), t.radiusCells, t.damage, t.tier, false, b.owner);
+                b.pos = point;
+                return false;
+            }
+            if (t.explodeOnImpact)
+            {
+                if (b.authority && cube && cube.IsSpawned) cube.ServerDamage(point, t.radiusCells, t.damage, t.tier, true, b.owner);
+                FxHub.Instance?.LocalBlast(point, t.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, BulletColor(t));
+                b.pos = point;
+                return false;
             }
             if (t.gooRadiusCells > 0)
             {
@@ -238,6 +273,40 @@ namespace Cubestruction.Tools
             return false;
         }
 
+        bool TouchesLocalPlayer(Bullet b)
+        {
+            var me = PlayerAvatar.Local;
+            if (me == null || !me.IsSpawned) return false;
+            return Vector3.Distance(me.Motor.Chest, b.pos) < (b.def.bulletSize + 0.55f) * b.scale;
+        }
+
+        /// <summary>Saw Yo-yo: passes through the cube carving, flies out, then homes back to the thrower's hand.</summary>
+        bool Carve(Bullet b, float dt, VoxelCube cube)
+        {
+            var t = b.def;
+            if (t.returnS > 0 && b.age >= t.returnS * 0.5f)
+            {
+                if (!PlayerAvatar.ByClient.TryGetValue(b.owner, out var pl)) return false;
+                var hand = pl.rightHand ? pl.rightHand.position : pl.Motor.Chest;
+                var to = hand - b.pos;
+                if (to.magnitude < 0.6f * b.scale) { Returns++; return false; }   // caught
+                b.vel = Vector3.Lerp(b.vel, to.normalized * t.speed * b.scale * 1.2f, dt * 8f);
+            }
+            b.pos += b.vel * dt;
+            b.digAt -= dt;
+            if (b.digAt <= 0)
+            {
+                b.digAt = 0.05f;
+                if (cube && cube.SolidNear(b.pos, t.radiusCells * cube.cellSize * b.scale, out _))
+                {
+                    if (b.authority && cube.IsSpawned) cube.ServerDamage(b.pos, t.radiusCells, t.damage, t.tier, false, b.owner);
+                    FxHub.Instance?.BulletImpact(b.pos, t, b.authority);
+                    Impacts++;
+                }
+            }
+            return true;
+        }
+
         Transform Get(ToolDef t, float scale)
         {
             var tr = _pool.Count > 0 ? _pool.Pop() : Create();
@@ -292,6 +361,10 @@ namespace Cubestruction.Tools
                     return new Color(1f, 0.95f, 0.6f, 1f);
                 case "DrillTorpedo": return new Color(1f, 0.62f, 0.2f, 1f);
                 case "GooGun": return new Color(1f, 0.42f, 0.78f, 0.95f);
+                case "WarpKunai": return new Color(0.55f, 0.35f, 1f, 1f);
+                case "SawYoyo": return new Color(0.9f, 0.95f, 1f, 1f);
+                case "MagnetBoulder": return new Color(0.55f, 0.6f, 0.75f, 1f);
+                case "BubbleWand": return new Color(0.75f, 0.95f, 1f, 0.45f);
                 case "HeliGatling": return new Color(1f, 0.7f, 0.25f, 1f);
                 case "RippleDisc": return new Color(0.75f, 0.55f, 1f, 0.95f);
                 case "BoostBlaster": return new Color(1f, 0.55f, 0.3f, 0.95f);

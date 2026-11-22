@@ -71,6 +71,18 @@ namespace Cubestruction.Player
             _grappling = false;
         }
 
+        // ---- Bubble Wand ride: gravity off, gentle lift, full steering
+        float _floatLeft;
+        public bool Floating => _floatLeft > 0;
+        public void Float(float seconds)
+        {
+            _floatLeft = Mathf.Max(_floatLeft, seconds);
+            Grounded = false;
+            if (_grappling) StopGrapple();
+            // pop off the ground first: standing pins vertical speed at -1, which the gentle lift alone can't beat
+            Velocity.y = Mathf.Max(Velocity.y, 2f * WorldScale);
+        }
+
         public void AddImpulse(Vector3 v) { Velocity += v; Grounded = false; }   // ropes hold: rocket-jump mid-swing
 
         public void Jump()
@@ -134,7 +146,7 @@ namespace Cubestruction.Player
             // ---- walking
             Vector3 targetH = moveIntent * (sprint ? sprintSpeed : walkSpeed) * scale;
             Vector3 h = new Vector3(Velocity.x, 0, Velocity.z);
-            float control = Grounded ? 12f : 12f * airControl;
+            float control = Grounded || _floatLeft > 0 ? 12f : 12f * airControl;
             h = Vector3.MoveTowards(h, targetH, control * scale * dt);
             Velocity.x = h.x; Velocity.z = h.z;
 
@@ -144,6 +156,7 @@ namespace Cubestruction.Player
                 JetFuel -= dt;
                 Velocity.y = Mathf.MoveTowards(Velocity.y, 4.5f * scale, 25f * dt);
             }
+            else if (_floatLeft > 0) { _floatLeft -= dt; Velocity.y = Mathf.MoveTowards(Velocity.y, 3.5f * scale, 20f * dt); }
             else Velocity.y += gravity * scale * dt;
 
             var flags = Controller.Move(Velocity * dt);

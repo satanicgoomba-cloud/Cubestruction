@@ -528,6 +528,54 @@ def frost_ray(p):
     p.box((0, 0.14, 0.03), (0.05, 0.12, 0.06), SK, bevel=0.02)
 
 
+def warp_kunai(p):
+    """Kunai with a glowing warp ring on the pommel."""
+    p.cyl((0, 0.1, 0), (0, -0.02, 0), 0.014, DK, segs=8)                                # wrapped handle
+    for y in (0.08, 0.04, 0.0):
+        p.cyl((0, y, 0), (0, y - 0.015, 0), 0.017, PU, segs=8)
+    p.torus((0, 0.13, 0), 0.028, 0.007, GL, matrix=rot(x=90), segs=12, minor=3)         # ring
+    p.box((0, -0.03, 0), (0.05, 0.02, 0.01), CH, bevel=0.003)                            # guard
+    p.cyl((0, -0.04, 0), (0, -0.22, 0), 0.03, CH, r2=0.0, segs=4)                        # blade
+
+
+def bubble_wand(p):
+    """Wand with a big soapy loop."""
+    p.cyl((0, 0.1, 0), (0, -0.25, 0), 0.014, SK, segs=8)
+    p.sphere((0, 0.11, 0), 0.025, PU, segs=8, rings=5)
+    p.torus((0, -0.33, 0), 0.08, 0.01, YE, matrix=rot(x=90), segs=16, minor=3)
+    p.cyl((0, -0.33, 0), (0, -0.335, 0), 0.075, AQ, segs=16)                           # soap film
+
+
+def saw_yoyo(p):
+    """Finger loop + saw disc yo-yo."""
+    p.torus((0, 0.02, 0), 0.025, 0.007, DK, matrix=rot(x=90), segs=10, minor=3)
+    p.cyl((0, 0.0, 0), (0, -0.1, 0), 0.003, WH, segs=4)                                # string
+    p.cyl((-0.02, -0.15, 0), (0.02, -0.15, 0), 0.055, CH, segs=16)                     # saw disc
+    for a in range(8):
+        p.box((0, -0.15, 0), (0.012, 0.13, 0.012), RD, bevel=0.002, matrix=rot(x=a * 22.5))   # teeth
+    p.cyl((-0.025, -0.15, 0), (0.025, -0.15, 0), 0.02, YE, segs=10)
+
+
+def chain_whip(p):
+    """Handle with a coiled chain."""
+    p.cyl((0, 0.08, 0), (0, -0.08, 0), 0.018, DK, segs=8)
+    p.sphere((0, 0.09, 0), 0.024, YE, segs=8, rings=5)
+    for i in range(6):
+        p.torus((0, -0.1 - i * 0.03, 0), 0.016, 0.005, CH, matrix=rot(x=90 if i % 2 else 0), segs=8, minor=3)
+    p.torus((0, -0.12, 0.0), 0.07, 0.008, CH, segs=14, minor=3)                        # coil
+    p.sphere((0, -0.3, 0), 0.025, OR, segs=8, rings=5)                                  # weight
+
+
+def magnet_glove(p):
+    """Chunky gauntlet with a horseshoe magnet over the knuckles."""
+    p.box((0, 0.02, 0), (0.1, 0.16, 0.06), SK, bevel=0.025)                              # glove
+    p.box((0, 0.1, 0), (0.11, 0.04, 0.07), DK, bevel=0.015)                              # cuff
+    p.torus((0, -0.1, 0.02), 0.05, 0.016, RD, segs=12, minor=4, matrix=rot(x=90))       # magnet arc
+    for x in (-0.05, 0.05):
+        p.box((x, -0.06, 0.02), (0.032, 0.06, 0.032), WH, bevel=0.006)                   # poles
+    p.sphere((0, -0.03, 0.04), 0.02, GL, segs=8, rings=5)
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -540,7 +588,8 @@ TOOLS = {
     "BloomMortar": bloom_mortar, "BoingPad": boing_pad, "RaptorLaptop": raptor_laptop,
     "HeliGunner": heli_gunner, "RaptorMissile": raptor_missile, "GooGun": goo_gun,
     "ChainZapper": chain_zapper, "FireworkLauncher": firework_launcher, "DrillTorpedo": drill_torpedo,
-    "FrostRay": frost_ray,
+    "FrostRay": frost_ray, "WarpKunai": warp_kunai, "BubbleWand": bubble_wand, "SawYoyo": saw_yoyo,
+    "ChainWhip": chain_whip, "MagnetGlove": magnet_glove,
 }
 
 

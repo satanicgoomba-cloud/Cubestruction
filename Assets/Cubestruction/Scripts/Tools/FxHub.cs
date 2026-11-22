@@ -70,6 +70,33 @@ namespace Cubestruction.Tools
             Play(zapClip, points[1], 0.7f, Random.Range(0.8f, 1.1f));
         }
 
+        /// <summary>Chain Whip lash: a quick sagging line from the hand to the point.</summary>
+        public void Whip(Vector3 from, Vector3 to, bool hit)
+        {
+            var go = new GameObject("Whip");
+            var lr = go.AddComponent<LineRenderer>();
+            lr.material = glowMaterial;
+            const int n = 12;
+            lr.positionCount = n;
+            var side = Vector3.Cross((to - from).normalized, Vector3.up);
+            for (int i = 0; i < n; i++)
+            {
+                float k = i / (n - 1f);
+                lr.SetPosition(i, Vector3.Lerp(from, to, k) + (side * 0.25f + Vector3.down * 0.35f) * Mathf.Sin(k * Mathf.PI));
+            }
+            lr.widthMultiplier = 0.035f;
+            lr.startColor = new Color(0.85f, 0.7f, 0.4f); lr.endColor = new Color(0.55f, 0.4f, 0.25f);
+            StartCoroutine(Fade(lr, 0.15f));
+            if (hit) { Burst(to, 10, new Color(1f, 0.85f, 0.5f)); Play(hitClip, to, 0.8f, 0.7f); }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        public void WhipRpc(Vector3 from, Vector3 to, ulong shooter)
+        {
+            if (NetworkManager.LocalClientId == shooter) return;   // the shooter drew it already
+            Whip(from, to, true);
+        }
+
         /// <summary>Local-only blast (bomblets): every peer pops its own copy, so no RPC.</summary>
         public void LocalBlast(Vector3 pos, float radiusM, Color c)
         {
