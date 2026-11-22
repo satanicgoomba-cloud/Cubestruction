@@ -8,8 +8,9 @@ namespace Cubestruction
 {
     /// <summary>
     /// Developer smoke test, only active when the game is launched with <c>-autotest</c>.
-    /// Hosts a LAN game, starts Mining, then checks that the starter pick mines voxels, that
-    /// the arena floor is walkable and that falling off the world respawns the player.
+    /// Hosts a LAN game and checks Mining (pick mines and pays, arena floor, fall respawn),
+    /// the shop (buying, double-charge, consumables, can't-afford, bought tool mines) and a solo
+    /// God Siege (unit purchase, units march, Smite, auto-wave, units damage the cube, cleanup).
     /// Results go to the player log as lines starting with "[AutoTest]"; the app quits at the end.
     /// </summary>
     [DefaultExecutionOrder(-40)]   // after FlatRig (-50), so our aim and trigger win; before ToolController
@@ -69,6 +70,94 @@ namespace Cubestruction
             var p = me.transform.position;
             Check(p.y > -1f && Mathf.Abs(p.z) < 15f, $"fall respawns near the cube (pos = {p})");
 
+            // ---- shop (host writes money directly to set up each case)
+            int spade = Balance.Tool("Shovel").index, grenade = Balance.Tool("Grenade").index, sledge = Balance.Tool("SledgeHammer").index;
+            me.money.Value = 1000;
+            me.BuyRpc(spade);
+            yield return new WaitForSeconds(0.3f);
+            Check(me.Owns(spade) && me.money.Value == 880, $"bought Aqua Spade for 120 (money {me.money.Value})");
+            me.BuyRpc(spade);
+            yield return new WaitForSeconds(0.3f);
+            Check(me.money.Value == 880, "an owned tool isn't charged twice");
+            int g0 = me.charges[grenade];
+            me.BuyRpc(grenade);
+            yield return new WaitForSeconds(0.3f);
+            Check(me.charges[grenade] == g0 + 5 && me.money.Value == 680, $"bought 5 Fizz Grenades for 200 (charges {me.charges[grenade]}, money {me.money.Value})");
+            me.money.Value = 10;
+            me.BuyRpc(sledge);
+            yield return new WaitForSeconds(0.3f);
+            Check(!me.Owns(sledge) && me.money.Value == 10, "can't buy a tool you can't afford");
+
+            // the bought spade mines (fresh -X face, facing +X)
+            me.Tools.SelectTool(spade);
+            before = cube.alive.Value;
+            var side = cube.Center + Vector3.left * cube.HalfExtent;
+            me.Motor.Teleport(new Vector3(side.x - 1f, cube.transform.position.y + 0.2f, side.z), 90f);
+            _aim = Quaternion.Euler(0, 90, 0);
+            _holdUse = true;
+            yield return new WaitForSeconds(3f);
+            _holdUse = false;
+            yield return new WaitForSeconds(0.5f);
+            Check(before - cube.alive.Value > 0, $"Aqua Spade mined {before - cube.alive.Value} voxels in 3 s");
+
+            // ---- God Siege, solo: the one player becomes the God
+            var mm = MatchManager.Instance;
+            var sd = Siege.SiegeDirector.Instance;
+            mm.ServerEndMatch("autotest");
+            yield return new WaitForSeconds(1f);
+            mm.ServerStartMatch(GameMode.GodSiege);
+            bool started = false;
+            yield return Wait(() => mm.state.Value == MatchState.Playing && sd.IsActive && VoxelCube.Instance != null && VoxelCube.Instance.IsSpawned,
+                              10f, ok => started = ok);
+            Check(started, "God Siege match started");
+            if (started)
+            {
+                cube = VoxelCube.Instance;
+                Check(me.role.Value == PlayerRole.God, $"solo player is the God (role {me.role.Value})");
+
+                // Commander buys a unit (switch role for the test; RPCs check the sender's role)
+                me.role.Value = PlayerRole.Commander;
+                float purse = sd.money.Value;
+                sd.BuyUnitRpc(0, 0);
+                yield return new WaitForSeconds(0.5f);
+                Check(Siege.EnemyUnit.Live.Count >= 1 && sd.money.Value < purse, $"Commander bought a unit (units {Siege.EnemyUnit.Live.Count}, purse {purse:0} -> {sd.money.Value:0})");
+
+                if (Siege.EnemyUnit.Live.Count > 0)
+                {
+                    var u = Siege.EnemyUnit.Live[0];
+                    float Flat(Vector3 a) => Vector3.ProjectOnPlane(a - cube.Center, Vector3.up).magnitude;
+                    float d0 = Flat(u.transform.position);
+                    yield return new WaitForSeconds(4f);
+                    float d1 = u != null && u.IsSpawned ? Flat(u.transform.position) : 0f;
+                    Check(d1 < d0 - 1f, $"unit marches on the cube ({d0:0.0} m -> {d1:0.0} m)");
+
+                    // God smites it
+                    me.role.Value = PlayerRole.God;
+                    float mana0 = sd.mana.Value, hp0 = u != null && u.IsSpawned ? u.hp.Value : 0f;
+                    if (u != null && u.IsSpawned) sd.CastSkillRpc(sd.Skill("Smite").index, u.transform.position);
+                    yield return new WaitForSeconds(0.5f);
+                    bool hurt = u == null || !u.IsSpawned || u.hp.Value < hp0;
+                    Check(hurt && sd.mana.Value < mana0, $"Smite hit the unit (hp {hp0:0} -> {(u != null && u.IsSpawned ? u.hp.Value : 0):0}, mana {mana0:0} -> {sd.mana.Value:0})");
+                }
+                me.role.Value = PlayerRole.God;
+
+                // a free auto-wave arrives (every 40 s)
+                int w0 = sd.wave.Value;
+                bool waved = false;
+                yield return Wait(() => sd.wave.Value > w0, 45f, ok => waved = ok);
+                Check(waved && Siege.EnemyUnit.Live.Count > 0, $"auto-wave {sd.wave.Value} spawned ({Siege.EnemyUnit.Live.Count} units live)");
+
+                // units reach and damage the cube
+                int alive0 = cube.alive.Value;
+                bool damaged = false;
+                yield return Wait(() => cube.alive.Value < alive0, 40f, ok => damaged = ok);
+                Check(damaged, $"units damaged the cube ({alive0} -> {cube.alive.Value} voxels)");
+
+                mm.ServerEndMatch("autotest");
+                yield return new WaitForSeconds(1f);
+                Check(!sd.IsActive && Siege.EnemyUnit.Live.Count == 0, "ending Siege despawns all units");
+            }
+
             Log(_failures == 0 ? "ALL PASSED" : _failures + " FAILED");
             yield return new WaitForSeconds(0.5f);
             Application.Quit(_failures == 0 ? 0 : 1);
@@ -80,6 +169,14 @@ namespace Cubestruction
             while (!cond() && t < timeout) { t += Time.unscaledDeltaTime; yield return null; }
             Check(cond(), what);
             if (!cond()) { Log("aborting"); Application.Quit(2); yield break; }
+        }
+
+        /// <summary>Non-fatal wait: reports whether the condition came true within the timeout.</summary>
+        static IEnumerator Wait(System.Func<bool> cond, float timeout, System.Action<bool> done)
+        {
+            float t = 0;
+            while (!cond() && t < timeout) { t += Time.unscaledDeltaTime; yield return null; }
+            done(cond());
         }
 
         void Update()
