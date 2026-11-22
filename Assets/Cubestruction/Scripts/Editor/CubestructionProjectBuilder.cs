@@ -119,6 +119,12 @@ namespace Cubestruction.EditorTools
             m.vignette.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
             m.bubble.SetFloat("_DstBlend", (float)BlendMode.One);
             m.bubble.SetFloat("_Fresnel", 2.5f);
+            // Shaders only reached via Shader.Find at runtime (VR pointer line) must be referenced by
+            // something in the build: a material in Resources does that.
+            Directory.CreateDirectory(Root + "/Resources/Materials");
+            const string keep = Root + "/Resources/Materials/KeepSpritesShader.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(keep) == null)
+                AssetDatabase.CreateAsset(new Material(Shader.Find("Sprites/Default")), keep);
             return m;
         }
 

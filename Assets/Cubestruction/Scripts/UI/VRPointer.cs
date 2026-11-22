@@ -14,6 +14,8 @@ namespace Cubestruction.UI
     public class VRPointer : MonoBehaviour
     {
         public Canvas canvas;
+        /// <summary>Pointing hands. GameMenus sets these (menu-rig hands before a player spawns); falls back to the local player.</summary>
+        public Transform leftHand, rightHand;
         public float maxDistance = 6f;
         public int uiLayer = 5;
 
@@ -63,7 +65,9 @@ namespace Cubestruction.UI
         void Update()
         {
             var me = PlayerAvatar.Local;
-            if (!canvas || !canvas.gameObject.activeInHierarchy || me == null)
+            var lh = leftHand ? leftHand : me != null ? me.leftHand : null;
+            var rh = rightHand ? rightHand : me != null ? me.rightHand : null;
+            if (!canvas || !canvas.gameObject.activeInHierarchy || lh == null || rh == null)
             {
                 if (_line) _line.enabled = false;
                 SetHover(null);
@@ -75,9 +79,9 @@ namespace Cubestruction.UI
             // whichever trigger was pressed last becomes the pointing hand
             if (_clickL.WasPressedThisFrame()) _useLeft = true;
             if (_clickR.WasPressedThisFrame()) _useLeft = false;
-            var hand = _useLeft ? me.leftHand : me.rightHand;
+            var hand = _useLeft ? lh : rh;
             var ray = new Ray(hand.position, hand.forward);
-            float dist = maxDistance * me.transform.localScale.x;
+            float dist = maxDistance * (me != null ? me.transform.localScale.x : 1f);
 
             Selectable hit = null;
             Vector3 end = ray.origin + ray.direction * dist;
