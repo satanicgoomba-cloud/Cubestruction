@@ -1,0 +1,53 @@
+{
+  "notes": "Layers are assigned by depth = distance (in cells) from the nearest outer face, expressed as a fraction of the half-size so any cube size works. Deeper = harder + more valuable. A tool whose tier is below the layer tier deals reduced damage (tierPenalty ^ difference). In co-op every voxel's HP is multiplied by players^coopHpExponent (keeps matches long without a bigger mesh) and value by players^coopValueExponent so each player still progresses through the shop.",
+  "tierPenalty": 0.35,
+  "layers": [
+    {
+      "id": "Crust",
+      "maxDepthFraction": 0.2,
+      "tier": 1,
+      "hp": 8,
+      "value": 1,
+      "color": "#8FE36B",
+      "glow": 0.0
+    },
+    {
+      "id": "Stone",
+      "maxDepthFraction": 0.45,
+      "tier": 2,
+      "hp": 25,
+      "value": 3,
+      "color": "#7FB8E8",
+      "glow": 0.0
+    },
+    {
+      "id": "Crystal",
+      "maxDepthFraction": 0.7,
+      "tier": 3,
+      "hp": 60,
+      "value": 8,
+      "color": "#B48CFF",
+      "glow": 0.35
+    },
+    {
+      "id": "Magma",
+      "maxDepthFraction": 0.9,
+      "tier": 4,
+      "hp": 140,
+      "value": 20,
+      "color": "#FF8A3D",
+      "glow": 0.8
+    },
+    {
+      "id": "Core",
+      "maxDepthFraction": 1.0,
+      "tier": 5,
+      "hp": 350,
+      "value": 60,
+      "color": "#FFF27A",
+      "glow": 1.0
+    }
+  ],
+  "coopValueExponent": 0.7,
+  "coopHpExponent": 0.5
+}
