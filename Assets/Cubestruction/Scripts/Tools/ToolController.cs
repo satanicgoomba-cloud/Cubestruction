@@ -16,6 +16,10 @@ namespace Cubestruction.Tools
     public class ToolController : NetworkBehaviour
     {
         public GameObject explosivePrefab;   // NetworkObject with ExplosiveProjectile
+        public GameObject heliPrefab;        // NetworkObject with HeliGunship (Heli-Gunner killstreak)
+
+        // server: an active Raptor Laptop
+        int _raptorLeft; float _raptorUntil;
 
         public readonly NetworkVariable<int> leftTool = new NetworkVariable<int>(-1, writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<int> rightTool = new NetworkVariable<int>(0, writePerm: NetworkVariableWritePermission.Owner);
@@ -129,6 +133,7 @@ namespace Cubestruction.Tools
             Tick(_left, Equipped(true));
             Tick(_right, Equipped(false));
             TickSwing();
+            HeliView.TryBegin(_avatar);
         }
 
         // ------------------------------------------------------------------ rope swing (owner)
@@ -318,6 +323,10 @@ namespace Cubestruction.Tools
                     if (pressed && t.id == "Detonator") { DetonateRpc(); Haptic(h, 0.6f); }
                     break;
 
+                case ToolCategory.Streak:
+                    if (pressed && h.cooldown <= 0 && !StreakState.Busy) { UseStreakRpc(t.index); h.cooldown = 1f; Haptic(h, 0.6f); }
+                    break;
+
                 case ToolCategory.Movement:
                     break;   // passives; the Zip Tether has its own swing button (TickSwing)
             }
@@ -469,6 +478,73 @@ namespace Cubestruction.Tools
             // volley was already simulated with authority when it fired)
             if (!IsOwner) fx.FireBullets(t, muzzle, dir, seed, OwnerClientId, true, scale);
             fx.BulletsRpc(tool, muzzle, dir, seed, OwnerClientId, scale);
+        }
+
+        // ------------------------------------------------------------------ killstreaks
+
+        [Rpc(SendTo.Server)]
+        void UseStreakRpc(int tool)
+        {
+            var t = Balance.Tool(tool);
+            if (t == null || t.cat != ToolCategory.Streak || _avatar.role.Value != PlayerRole.Miner) return;
+            if (MatchManager.Instance.state.Value != MatchState.Playing) return;
+            if (t.id == "HeliGunner" && HeliGunship.Instance != null) { DenyRpc("A chopper is already in the air. Try again when it leaves."); return; }
+            if (!_avatar.ServerConsumeCharge(tool)) return;
+            switch (t.id)
+            {
+                case "RaptorLaptop":
+                    _raptorLeft = Mathf.Max(1, t.pellets);
+                    _raptorUntil = Time.time + t.fuse + 3f;
+                    BeginRaptorRpc(_raptorLeft, t.fuse);
+                    break;
+                case "HeliGunner":
+                    var go = Instantiate(heliPrefab);
+                    go.GetComponent<HeliGunship>().ServerInit(OwnerClientId, t.fuse);
+                    go.GetComponent<NetworkObject>().Spawn(true);
+                    break;
+            }
+        }
+
+        [Rpc(SendTo.Owner)]
+        void BeginRaptorRpc(int missiles, float seconds)
+        {
+            if (RaptorView.Active != null) return;
+            gameObject.AddComponent<RaptorView>().Begin(this, missiles, seconds);
+        }
+
+        [Rpc(SendTo.Owner)]
+        void DenyRpc(string msg) => UI.GameMenus.Instance?.Toast(msg, AeroPalette.Danger);
+
+        /// <summary>Raptor: drop a missile from the sky onto a point the laptop picked.</summary>
+        [Rpc(SendTo.Server)]
+        public void RaptorStrikeRpc(Vector3 target)
+        {
+            if (_raptorLeft <= 0 || Time.time > _raptorUntil || float.IsNaN(target.x) || float.IsInfinity(target.x)) return;
+            var cube = VoxelCube.Instance;
+            if (cube && Vector3.Distance(target, cube.Center) > 80f) return;
+            _raptorLeft--;
+            var m = Balance.Tool("RaptorMissile");
+            var start = target + Vector3.up * 40f + new Vector3(Random.Range(-4f, 4f), 0, Random.Range(-4f, 4f));
+            var dir = (target - start).normalized;
+            var go = Instantiate(explosivePrefab, start, Quaternion.LookRotation(dir));
+            go.GetComponent<ExplosiveProjectile>().ServerInit(m, OwnerClientId, dir * 55f);
+            go.GetComponent<NetworkObject>().Spawn(true);
+        }
+
+        /// <summary>Heli-Gunner: the gunner fired the door gun. Same seeded-volley scheme as FireRpc.</summary>
+        [Rpc(SendTo.Server)]
+        public void HeliFireRpc(Vector3 muzzle, Vector3 dir, int seed)
+        {
+            var heli = HeliGunship.Instance;
+            if (heli == null || heli.gunner.Value != OwnerClientId || float.IsNaN(dir.x)) return;
+            if (Vector3.Distance(muzzle, heli.transform.position) > 8f) return;
+            var g = Balance.Tool("HeliGatling");
+            float now = Time.time;
+            if (_serverLastUse.TryGetValue(g.index, out var last) && now - last < g.cooldown * 0.45f) return;
+            _serverLastUse[g.index] = now;
+            var fx = FxHub.Instance; if (!fx) return;
+            if (!IsOwner) fx.FireBullets(g, muzzle, dir, seed, OwnerClientId, true, 1f);
+            fx.BulletsRpc(g.index, muzzle, dir, seed, OwnerClientId, 1f);
         }
 
         [Rpc(SendTo.Server)]

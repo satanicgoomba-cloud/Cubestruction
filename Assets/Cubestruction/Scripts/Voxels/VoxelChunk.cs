@@ -67,6 +67,8 @@ namespace Cubestruction.Voxels
                 // subtle per-voxel brightness jitter so the surface reads as pixels, not a flat slab
                 float j = 0.9f + 0.1f * Hash(x, y, z);
                 Color c = L.unityColor * j; c.a = 1;
+                float glow = L.glow;
+                if (_cube.IsLoot(idx)) { c = Loot.Gold * (0.95f + 0.1f * Hash(x, y, z)); c.a = 1; glow = 0.9f; }   // loot shines gold
                 Color32 c32 = c;
                 // cube local space: origin at bottom centre
                 var centre = new Vector3((x - n * 0.5f + 0.5f) * s, (y + 0.5f) * s, (z - n * 0.5f + 0.5f) * s);
@@ -81,7 +83,7 @@ namespace Cubestruction.Voxels
                         V.Add(centre + face[k] * s);
                         Nrm.Add(d);
                         Col.Add(c32);
-                        Uv2.Add(new Vector2(L.glow, 0));
+                        Uv2.Add(new Vector2(glow, 0));
                     }
                     Uv.Add(new Vector2(0, 0)); Uv.Add(new Vector2(0, 1)); Uv.Add(new Vector2(1, 1)); Uv.Add(new Vector2(1, 0));
                     Tri.Add(vi); Tri.Add(vi + 1); Tri.Add(vi + 2);

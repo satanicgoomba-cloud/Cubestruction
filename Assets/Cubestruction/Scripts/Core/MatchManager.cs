@@ -78,6 +78,7 @@ namespace Cubestruction
             // In siege the cube isn't mined by players, so no co-op scaling.
             vc.ServerConfigure(n, m == GameMode.Mining ? players.Count : 1);
             vc.OnCellsDestroyedServer += OnCellsDestroyed;
+            if (m == GameMode.Mining) vc.ServerEnableLoot();
             _cube.Spawn(true);
 
             // assign roles + reset economy

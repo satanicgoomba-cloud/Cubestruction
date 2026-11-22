@@ -167,7 +167,7 @@ namespace Cubestruction.Player
             var headLocal = _avatar.headAnchor.localPosition;
             _motor.Controller.center = new Vector3(headLocal.x, _motor.Controller.height * 0.5f, headLocal.z);
 
-            if (_motor.Frozen) { UpdateVignette(1f); return; }
+            if (_motor.Frozen) { UpdateVignette(Tools.HeliView.Active ? 0.3f : 1f); return; }   // ragdoll: dark; heli seat: light
 
             // tool use is ToolController's job; the rig only routes A/X (cycle) and B/Y (menu)
             if (Left.primary.WasPressedThisFrame()) _avatar.Tools.CycleHand(true);

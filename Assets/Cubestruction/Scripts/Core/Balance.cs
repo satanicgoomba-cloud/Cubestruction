@@ -9,7 +9,9 @@ namespace Cubestruction
     // so a tuning change in JSON is reflected in both the game and the simulator.
     // ---------------------------------------------------------------------------------------------
 
-    public enum ToolCategory { Melee, Beam, Gun, Throwable, Placed, Movement, Utility }
+    /// <summary>Streak = killstreak item (Raptor Laptop, Heli-Gunner). Hidden = internal def used by a
+    /// streak (missile, door gun): never sold, owned or shown.</summary>
+    public enum ToolCategory { Melee, Beam, Gun, Throwable, Placed, Movement, Utility, Streak, Hidden }
 
     [Serializable]
     public class LayerDef

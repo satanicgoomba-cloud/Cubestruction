@@ -100,9 +100,12 @@ namespace Cubestruction.Player
 
         void Update()
         {
-            bool menus = UI.GameMenus.Instance != null && UI.GameMenus.Instance.BlocksGameplayInput;
-            if (_shop.WasPressedThisFrame()) UI.GameMenus.Instance?.ToggleShop();
-            if (!Application.isMobilePlatform && menus != CursorFree) LockCursor(!menus);
+            bool uiMenus = UI.GameMenus.Instance != null && UI.GameMenus.Instance.BlocksGameplayInput;
+            // a killstreak view (Raptor laptop, heli seat) drives camera + input while it's up
+            bool menus = uiMenus || Tools.StreakState.TakesOverInput;
+            bool cursorFree = uiMenus || (Tools.StreakState.TakesOverInput && Tools.StreakState.WantsCursor);
+            if (_shop.WasPressedThisFrame() && !Tools.StreakState.TakesOverInput) UI.GameMenus.Instance?.ToggleShop();
+            if (!Application.isMobilePlatform && cursorFree != CursorFree) LockCursor(!cursorFree);
             if (_motor.Frozen || menus)
             {
                 _motor.moveIntent = Vector3.zero; _motor.climbHeld = false;

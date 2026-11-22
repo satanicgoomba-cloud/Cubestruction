@@ -29,26 +29,42 @@ namespace Cubestruction.Tools
         GameObject _visual;
         readonly Dictionary<ulong, float> _padReady = new Dictionary<ulong, float>();
         public bool IsPad => Def != null && Def.id == "BoingPad";
+        static bool IsRocket(ToolDef t) => t.id == "RocketLauncher" || t.id == "RaptorMissile";
 
         void Awake() { _rb = GetComponent<Rigidbody>(); }
 
+        ToolDef _init; Vector3 _initVel;
+
+        /// <summary>Server, before Spawn. The values are applied in OnNetworkSpawn: NetworkVariables can't be
+        /// written before the object spawns, and NetworkRigidbody holds the body kinematic until then (a
+        /// velocity set earlier is dropped, which used to leave grenades at your feet and rockets hanging).</summary>
         public void ServerInit(ToolDef t, ulong owner, Vector3 velocity)
         {
-            toolIndex.Value = t.index;
+            _init = t;
+            _initVel = velocity;
             Owner = owner;
-            fuseLeft.Value = t.id == "C4" ? float.PositiveInfinity : (t.id == "RocketLauncher" ? 6f : t.fuse);
-            _rb.linearVelocity = velocity;
-            _rb.useGravity = t.id != "RocketLauncher";
+        }
+
+        void ServerApplyInit()
+        {
+            var t = _init;
+            if (t == null) return;
+            toolIndex.Value = t.index;
+            bool rocket = IsRocket(t);
+            fuseLeft.Value = t.id == "C4" ? float.PositiveInfinity : (rocket ? 6f : t.fuse);
             bool placed = t.cat == ToolCategory.Placed;
-            _rb.isKinematic = placed && velocity.sqrMagnitude < 0.01f;   // placed on a surface
+            _rb.isKinematic = placed && _initVel.sqrMagnitude < 0.01f;   // placed on a surface
+            _rb.useGravity = !rocket;
             _rb.mass = placed ? 6f : 0.4f;
+            if (!_rb.isKinematic) _rb.linearVelocity = _initVel;
             _pulsesLeft = t.id == "BlackHoleGrenade" ? Mathf.Max(1, t.pellets) : 0;
         }
 
         public override void OnNetworkSpawn()
         {
             Live.Add(this);
-            if (!IsServer) _rb.isKinematic = true;
+            if (IsServer) ServerApplyInit();
+            else _rb.isKinematic = true;
             toolIndex.OnValueChanged += (_, __) => BuildVisual();
             BuildVisual();
         }
@@ -59,7 +75,8 @@ namespace Cubestruction.Tools
         {
             var t = Def;
             if (t == null || _visual) return;
-            _visual = ToolVisuals.Create(t.id, transform);
+            // rockets look like missiles (not like the launcher that fired them)
+            _visual = ToolVisuals.Create(IsRocket(t) ? "RaptorMissile" : t.id, transform);
         }
 
         void Update()
@@ -99,7 +116,7 @@ namespace Cubestruction.Tools
         {
             if (!IsServer || _exploded) return;
             var t = Def; if (t == null) return;
-            if (t.id == "RocketLauncher") { ServerExplode(); return; }
+            if (IsRocket(t)) { ServerExplode(); return; }
             if ((t.id == "StickyBomb" || t.id == "C4") && !_stuck && c.collider.GetComponentInParent<ExplosiveProjectile>() == null)
             {
                 _stuck = true;

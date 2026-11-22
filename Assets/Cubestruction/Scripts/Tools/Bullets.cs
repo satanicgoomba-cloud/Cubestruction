@@ -235,6 +235,7 @@ namespace Cubestruction.Tools
                 case "Minigun": return new Color(0.55f, 0.95f, 1f, 0.9f);
                 case "Shotgun": return new Color(1f, 0.82f, 0.35f, 0.95f);
                 case "RailGun": return new Color(0.8f, 1f, 1f, 1f);
+                case "HeliGatling": return new Color(1f, 0.7f, 0.25f, 1f);
                 case "RippleDisc": return new Color(0.75f, 0.55f, 1f, 0.95f);
                 case "BoostBlaster": return new Color(1f, 0.55f, 0.3f, 0.95f);
                 case "BloomMortar": return t.popOnEnd ? new Color(1f, 0.45f, 0.75f, 0.95f) : new Color(1f, 0.9f, 0.4f, 1f);

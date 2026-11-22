@@ -154,6 +154,13 @@ namespace Cubestruction.Player
             else Motor.Teleport(position, yaw);
         }
 
+        /// <summary>Server -> owner: you broke a loot voxel.</summary>
+        [Rpc(SendTo.Owner)]
+        public void LootRpc(string prize, string layer)
+        {
+            UI.GameMenus.Instance?.Toast($"LOOT ({layer})!  {prize}", AeroPalette.Gold);
+        }
+
         /// <summary>Server -> owner: Boing Pad. Sets the upward speed (keeps horizontal momentum), never ragdolls.</summary>
         [Rpc(SendTo.Owner)]
         public void LaunchRpc(Vector3 velocity)

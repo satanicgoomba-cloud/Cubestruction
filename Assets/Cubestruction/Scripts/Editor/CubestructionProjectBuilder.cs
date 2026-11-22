@@ -48,10 +48,11 @@ namespace Cubestruction.EditorTools
             var mats = CreateCoreMaterials();
             BuildToolVisuals();
             var explosive = BuildExplosivePrefab();
+            var heli = BuildHeliPrefab();
             var cube = BuildCubePrefab(mats.voxel);
-            var player = BuildPlayerPrefab(explosive, mats.vignette);
+            var player = BuildPlayerPrefab(explosive, heli, mats.vignette);
             var units = BuildUnitPrefabs();
-            var list = BuildPrefabList(new[] { player, cube, explosive }.Concat(units).ToArray());
+            var list = BuildPrefabList(new[] { player, cube, explosive, heli }.Concat(units).ToArray());
             BuildScene(player, cube, units, list, mats);
             AssetDatabase.SaveAssets();
             Debug.Log("<color=#3cf>Cubestruction:</color> build complete. Open Assets/Cubestruction/Scenes/Cubestruction.unity and press Play " +
@@ -175,7 +176,11 @@ namespace Cubestruction.EditorTools
         {
             var src = LoadModel(relPath);
             GameObject go;
-            if (src) go = (GameObject)PrefabUtility.InstantiatePrefab(src);
+            if (src)
+            {
+                go = (GameObject)PrefabUtility.InstantiatePrefab(src);
+                PrefabUtility.UnpackPrefabInstance(go, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            }
             else
             {
                 Debug.LogWarning($"Model {relPath}.fbx missing — using a primitive. Run Blender/build_all.py.");
@@ -184,7 +189,6 @@ namespace Cubestruction.EditorTools
                 go.transform.localScale = fallbackScale;
             }
             go.transform.SetParent(parent, false);
-            PrefabUtility.UnpackPrefabInstance(go, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             Aerofy(go);
             return go;
         }
@@ -195,6 +199,7 @@ namespace Cubestruction.EditorTools
         {
             foreach (var t in Balance.Tools)
             {
+                if (t.cat == ToolCategory.Hidden && LoadModel($"Tools/{t.id}") == null) continue;   // internal defs without a look
                 var root = new GameObject(t.id);
                 var model = InstantiateModel($"Tools/{t.id}", root.transform, PrimitiveType.Cube, new Vector3(0.06f, 0.06f, 0.35f));
                 model.name = "Model";
@@ -237,7 +242,20 @@ namespace Cubestruction.EditorTools
             return SavePrefab(go, "VoxelCube");
         }
 
-        static GameObject BuildPlayerPrefab(GameObject explosive, Material vignette)
+        /// <summary>Heli-Gunner gunship: server-flown (NetworkTransform), no colliders.</summary>
+        static GameObject BuildHeliPrefab()
+        {
+            var go = new GameObject("Heli");
+            go.AddComponent<NetworkObject>();
+            go.AddComponent<NetworkTransform>();
+            go.AddComponent<HeliGunship>();
+            var model = InstantiateModel("Env/Heli", go.transform, PrimitiveType.Capsule, new Vector3(2f, 1.2f, 4f));
+            model.name = "Model";
+            foreach (var c in model.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+            return SavePrefab(go, "Heli");
+        }
+
+        static GameObject BuildPlayerPrefab(GameObject explosive, GameObject heli, Material vignette)
         {
             var go = new GameObject("Player");
             go.AddComponent<NetworkObject>();
@@ -278,6 +296,7 @@ namespace Cubestruction.EditorTools
             avatar.headAnchor = head; avatar.leftHand = left; avatar.rightHand = right;
             go.AddComponent<PlayerMotor>();
             go.AddComponent<ToolController>().explosivePrefab = explosive;
+            go.GetComponent<ToolController>().heliPrefab = heli;
             go.AddComponent<PlayerRagdoll>().visual = visual;
             var vr = go.AddComponent<VRRig>(); vr.vignetteMaterial = vignette; vr.enabled = false;
             go.AddComponent<FlatRig>().enabled = false;

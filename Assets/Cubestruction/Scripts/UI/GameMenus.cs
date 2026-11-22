@@ -483,7 +483,7 @@ namespace Cubestruction.UI
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4;
             grid.childAlignment = TextAnchor.UpperCenter;
 
-            _shopTools = Balance.Tools.Where(t => t.id != "Detonator" && t.id != "Pickaxe").OrderBy(t => t.price).ToList();
+            _shopTools = Balance.Tools.Where(t => t.id != "Detonator" && t.id != "Pickaxe" && t.cat != ToolCategory.Hidden).OrderBy(t => t.price).ToList();
             for (int i = 0; i < CardsPerPage; i++) _cards.Add(MakeCard(gridRt));
 
             var footer = AeroTheme.HRow(_shop, "Footer");
@@ -572,6 +572,32 @@ namespace Cubestruction.UI
             _shopOpen = !_shopOpen;
             _shopSig = -1;
             if (_shopOpen) _pauseOpen = false;
+        }
+
+        GameObject _bannerRoot; Text _bannerText; Button _bannerBtn;
+
+        /// <summary>Killstreak status strip at the top of the HUD (null hides it). An optional button
+        /// (e.g. "Done" to close the Raptor laptop).</summary>
+        public void SetBanner(string text, string buttonLabel = null, UnityEngine.Events.UnityAction onButton = null)
+        {
+            if (_bannerRoot == null)
+            {
+                if (text == null || _hudCanvas == null) return;
+                var bg = AeroTheme.Panel(_hudCanvas.transform, "StreakBanner");
+                bg.color = new Color(0.05f, 0.12f, 0.3f, 0.88f);
+                bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, IsVR ? -6 : -110), new Vector2(IsVR ? 1060 : 1000, 84), new Vector2(0.5f, 1));
+                _bannerText = AeroTheme.Label(bg.transform, "", IsVR ? 30 : 28, TextAnchor.MiddleLeft, Color.white);
+                _bannerText.rectTransform.Fill(24);
+                _bannerBtn = AeroTheme.Button(bg.transform, "Done", null, AeroPalette.Danger, 24);
+                ((RectTransform)_bannerBtn.transform).Place(new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-14, 0), new Vector2(150, 60), new Vector2(1, 0.5f));
+                _bannerRoot = bg.gameObject;
+            }
+            _bannerRoot.SetActive(text != null);
+            if (text == null) return;
+            _bannerText.text = text;
+            _bannerBtn.onClick.RemoveAllListeners();
+            _bannerBtn.gameObject.SetActive(onButton != null);
+            if (onButton != null) { _bannerBtn.SetLabel(buttonLabel ?? "Done"); _bannerBtn.onClick.AddListener(onButton); }
         }
 
         public void Toast(string msg) => Toast(msg, AeroPalette.SkyDeep);
@@ -669,7 +695,7 @@ namespace Cubestruction.UI
             _shop.gameObject.SetActive(showBase && _screen == Screen.Hud && _shopOpen);
             _pause.gameObject.SetActive(showBase && _screen == Screen.Hud && _pauseOpen && !_shopOpen);
             _hud.gameObject.SetActive(_screen == Screen.Hud && miner);
-            if (_mobile) _mobile.gameObject.SetActive(_screen == Screen.Hud && miner && !BlocksGameplayInput);
+            if (_mobile) _mobile.gameObject.SetActive(_screen == Screen.Hud && miner && !BlocksGameplayInput && !StreakState.HideTouchControls);
             _sky.gameObject.SetActive(!IsVR && (_screen == Screen.Main || _screen == Screen.Connecting));
 
             switch (_screen)

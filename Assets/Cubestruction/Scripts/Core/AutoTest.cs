@@ -229,6 +229,26 @@ namespace Cubestruction
                 yield return new WaitForSeconds(1.5f);
             }
             {
+                // thrown explosives keep their throw speed (regression: the velocity used to be dropped at spawn)
+                var gr = Balance.Tool("Grenade");
+                me.charges[gr.index] = 5;
+                yield return null;
+                me.Tools.SelectTool(gr.index);
+                me.Motor.Teleport(open, 270f);
+                _aim = Quaternion.Euler(0, 270f, 0); _pitch = -10f;   // away from the cube
+                yield return new WaitForSeconds(0.4f);
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false; _pitch = 0f;
+                yield return new WaitForSeconds(0.45f);
+                float far = 0;
+                foreach (var e in Tools.ExplosiveProjectile.Live)
+                    if (e.Def != null && e.Def.id == "Grenade")
+                        far = Mathf.Max(far, Vector3.ProjectOnPlane(e.transform.position - me.transform.position, Vector3.up).magnitude);
+                Check(far > 3f, $"a thrown grenade flies ({far:0.0} m in 0.45 s)");
+                yield return new WaitForSeconds(2.5f);
+            }
+            {
                 var pad = Balance.Tool("BoingPad");
                 while (me.charges.Count <= pad.index) me.charges.Add(0);
                 me.charges[pad.index] = 3;
@@ -251,6 +271,86 @@ namespace Cubestruction
                     for (float tt = 0; tt < 0.8f; tt += Time.deltaTime) { vy = Mathf.Max(vy, me.Motor.Velocity.y); yield return null; }
                     Check(vy > 10f, $"stepping on a Boing Pad launches you ({vy:0.0} m/s up)");
                     yield return new WaitForSeconds(2.5f);
+                }
+            }
+
+            // ---- loot: there is loot hidden in the cube; break the shallowest one and get paid
+            {
+                Check(cube.LootCount >= 30, $"loot hidden in the cube ({cube.LootCount} gold voxels)");
+                int best = -1, bestDepth = int.MaxValue, n = cube.Grid.N;
+                foreach (var idx in cube.loot)
+                {
+                    var c = cube.Grid.Coord(idx);
+                    int d = Mathf.Min(Mathf.Min(Mathf.Min(c.x, n - 1 - c.x), Mathf.Min(c.y, n - 1 - c.y)), Mathf.Min(c.z, n - 1 - c.z));
+                    if (d < bestDepth) { bestDepth = d; best = idx; }
+                }
+                if (best >= 0)
+                {
+                    int lootCash0 = me.money.Value, ch0 = 0; ulong own0 = me.ownedTools.Value;
+                    foreach (var ch in me.charges) ch0 += ch;
+                    int lc = cube.LootCount;
+                    cube.ServerDamage(cube.CellToWorld(cube.Grid.Coord(best)), 0.4f, 1e6f, 9, false, me.OwnerClientId);
+                    yield return new WaitForSeconds(0.3f);
+                    int ch1 = 0; foreach (var ch in me.charges) ch1 += ch;
+                    bool paid = me.money.Value != lootCash0 || ch1 != ch0 || me.ownedTools.Value != own0;
+                    Check(cube.LootCount == lc - 1 && paid, $"breaking a loot voxel (depth {bestDepth}) pays out");
+                }
+            }
+
+            // ---- Raptor Laptop: opens with 6 missiles, strikes blow up the cube, closing hands control back
+            {
+                var lap = Balance.Tool("RaptorLaptop");
+                me.charges[lap.index] = 1;
+                yield return null;
+                me.Tools.SelectTool(lap.index);
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false;
+                yield return new WaitForSeconds(0.6f);
+                var rv = Tools.RaptorView.Active;
+                Check(rv != null && rv.MissilesLeft == 6, "Raptor Laptop opens with 6 missiles");
+                if (rv != null)
+                {
+                    int v0 = cube.alive.Value;
+                    var top = cube.Center + Vector3.up * cube.HalfExtent;
+                    rv.Strike(top);
+                    yield return new WaitForSeconds(0.5f);
+                    rv.Strike(top + Vector3.right * 3f);
+                    yield return new WaitForSeconds(2f);
+                    Check(cube.alive.Value < v0 - 100, $"Raptor strikes blow up the cube ({v0 - cube.alive.Value} voxels from 2 missiles)");
+                    rv.End();
+                    yield return null;
+                    Check(Tools.RaptorView.Active == null && !Tools.StreakState.TakesOverInput, "closing the laptop gives control back");
+                }
+            }
+
+            // ---- Heli-Gunner: chopper arrives, you ride the door seat, the door gun shreds, then you land
+            {
+                var hg = Balance.Tool("HeliGunner");
+                me.charges[hg.index] = 1;
+                yield return null;
+                me.Tools.SelectTool(hg.index);
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false;
+                yield return new WaitForSeconds(1.5f);
+                var heli = Tools.HeliGunship.Instance;
+                var hv = Tools.HeliView.Active;
+                Check(heli != null && hv != null, "Heli-Gunner calls in the chopper and seats you");
+                if (heli != null && hv != null)
+                {
+                    Check(Vector3.Distance(me.transform.position, heli.Seat.position) < 1f, "you ride the door seat");
+                    int v0 = cube.alive.Value;
+                    hv.aimAt = cube.Center + Vector3.up * cube.HalfExtent * 0.5f;
+                    hv.autoFire = true;
+                    yield return new WaitForSeconds(3f);
+                    hv.autoFire = false;
+                    yield return new WaitForSeconds(1f);
+                    Check(cube.alive.Value < v0 - 50, $"the door gun shreds the cube ({v0 - cube.alive.Value} voxels in 3 s)");
+                    heli.ServerEnd();
+                    yield return new WaitForSeconds(1f);
+                    Check(Tools.HeliView.Active == null && Tools.HeliGunship.Instance == null && !me.Motor.Frozen &&
+                          me.transform.position.y < cube.transform.position.y + 3f, "when the chopper leaves you're back on the platform");
                 }
             }
 

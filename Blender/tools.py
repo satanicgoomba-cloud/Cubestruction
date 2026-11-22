@@ -436,6 +436,36 @@ def boing_pad(p):
     p.torus((0, 0, 0.23), 0.3, 0.015, YE, segs=20, minor=3)
 
 
+def raptor_laptop(p):
+    """Rugged open laptop (killstreak). Origin at the grip: held by the base's edge."""
+    p.box((0, -0.14, 0.0), (0.34, 0.24, 0.025), DK, bevel=0.01)                       # base
+    p.box((0, -0.14, 0.014), (0.3, 0.2, 0.004), CH, bevel=0.002)                      # keyboard deck
+    p.box((0, -0.27, 0.12), (0.34, 0.015, 0.23), DK, bevel=0.01, matrix=rot(x=-15))   # lid
+    p.box((0, -0.262, 0.12), (0.3, 0.004, 0.19), GG, bevel=0.002, matrix=rot(x=-15))  # glowing screen
+    for x in (-0.17, 0.17):
+        p.box((x, -0.14, 0.0), (0.02, 0.26, 0.04), YE, bevel=0.008)                    # bumpers
+    p.box((0, -0.01, -0.005), (0.12, 0.03, 0.02), RD, bevel=0.006)                    # handle
+
+
+def heli_gunner(p):
+    """Signal flare that calls in the chopper (killstreak)."""
+    p.cyl((0, 0.06, 0), (0, -0.2, 0), 0.03, RD, segs=12)
+    p.cyl((0, -0.2, 0), (0, -0.25, 0), 0.034, WH, segs=12)
+    p.sphere((0, -0.27, 0), 0.03, GR, segs=10, rings=6)
+    p.torus((0, -0.05, 0), 0.034, 0.008, YE, matrix=rot(x=90), segs=12, minor=3)
+    p.box((0, 0.03, 0.035), (0.02, 0.05, 0.02), DK, bevel=0.005)                     # pull tab
+
+
+def raptor_missile(p):
+    """The missile itself (Raptor strikes and Bloop rockets). Nose toward Blender -Y."""
+    p.cyl((0, 0.22, 0), (0, -0.2, 0), 0.05, WH, segs=12)
+    p.cyl((0, -0.2, 0), (0, -0.32, 0), 0.05, RD, r2=0.0, segs=12)                  # nose
+    p.cyl((0, 0.22, 0), (0, 0.26, 0), 0.04, GR, segs=10)                           # exhaust glow
+    for a in (0, 90, 180, 270):
+        p.box((0, 0.17, 0), (0.16, 0.08, 0.008), YE, bevel=0.003, matrix=rot(y=a))  # fins
+    p.torus((0, -0.05, 0), 0.05, 0.008, AQ, matrix=rot(x=90), segs=12, minor=3)
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -445,7 +475,8 @@ TOOLS = {
     "SonicHammer": sonic_hammer, "NukeCrate": nuke_crate, "GrappleHook": grapple_hook,
     "Jetpack": jetpack, "RocketBoots": rocket_boots, "ClimbingGloves": climbing_gloves,
     "PinballPopper": pinball_popper, "BoostBlaster": boost_blaster, "RippleDisc": ripple_disc,
-    "BloomMortar": bloom_mortar, "BoingPad": boing_pad,
+    "BloomMortar": bloom_mortar, "BoingPad": boing_pad, "RaptorLaptop": raptor_laptop,
+    "HeliGunner": heli_gunner, "RaptorMissile": raptor_missile,
 }
 
 

@@ -6,6 +6,7 @@ Output (Assets/Cubestruction/Models/Env/):
   * Bubble.fbx    - low-poly decorative bubble, diameter 1, origin at its centre.
   * ShopKiosk.fbx - glossy rounded kiosk ~2.1 units tall, origin on the ground,
                     counter facing Blender -Y (Unity +Z).
+  * Heli.fbx      - Heli-Gunner gunship (hierarchy: Body, Rotor, TailRotor, Seat empty).
 Each file is a single mesh object named after the file.
 """
 
@@ -73,7 +74,40 @@ def shop_kiosk():
     return C.make_object("ShopKiosk", p)
 
 
-ENV = {"Pedestal": pedestal, "Bubble": bubble, "ShopKiosk": shop_kiosk}
+def heli():
+    """Aero gunship for the Heli-Gunner streak. Root "Heli" at the body centre, facing Blender -Y
+    (Unity +Z). Children: Body, Rotor (spins about Z/Unity Y), TailRotor (spins about X), and an
+    empty "Seat" at the open left door (Blender +X = Unity -X) where the gunner sits."""
+    root = C.make_empty("Heli")
+    b = C.Part()
+    b.capsule((0, 1.1, 0), (0, -0.9, 0), 1.05, "Env_KioskWhite", segs=16)               # cabin
+    b.sphere((0, -1.55, 0.15), 0.85, "Env_KioskGlass", segs=16, rings=8, scale=(1, 1.1, 0.85))  # bubble canopy
+    b.cyl((0, 1.7, 0.25), (0, 4.6, 0.55), 0.32, "Env_KioskAqua", r2=0.16, segs=12)        # tail boom
+    b.box((0, 4.55, 1.0), (0.08, 0.55, 0.9), "Env_KioskLime", bevel=0.06)                # fin
+    b.box((0, 4.4, 0.55), (1.2, 0.35, 0.07), "Env_KioskLime", bevel=0.03)                # stabiliser
+    for x in (-0.95, 0.95):                                                               # skids
+        b.cyl((x, -1.3, -1.35), (x, 1.4, -1.35), 0.07, "Env_KioskChrome", segs=8)
+        for y in (-0.6, 0.7):
+            b.cyl((x * 0.75, y, -0.75), (x, y, -1.35), 0.05, "Env_KioskChrome", segs=6)
+    b.cyl((0, 0, 1.0), (0, 0, 1.35), 0.22, "Env_KioskChrome", segs=10)                   # mast
+    b.box((-1.08, 0.1, -0.05), (0.1, 1.2, 0.95), "Env_KioskAqua", bevel=0.05)            # right door (closed)
+    b.cyl((1.25, -0.2, 0.1), (1.25, -1.05, 0.1), 0.09, "Env_KioskChrome", segs=8)        # door gun barrel (open left door)
+    b.box((1.2, 0.0, 0.1), (0.25, 0.35, 0.25), "Env_UnderDeep", bevel=0.05)              # gun body
+    C.make_object("Body", b, (0, 0, 0), parent=root)
+    r = C.Part()
+    r.cyl((0, 0, 1.35), (0, 0, 1.5), 0.28, "Env_KioskLime", segs=10)                     # hub
+    for a in (0, 90, 180, 270):
+        r.box((0, 2.3, 1.43), (0.3, 4.2, 0.05), "Env_KioskWhite", bevel=0.02, matrix=C.rot(z=a))
+    C.make_object("Rotor", r, (0, 0, 1.43), parent=root)
+    t = C.Part()
+    for a in (0, 90):
+        t.box((0.12, 4.75, 1.0), (0.04, 0.9, 0.12), "Env_KioskWhite", bevel=0.02, matrix=C.rot(x=a))
+    C.make_object("TailRotor", t, (0.12, 4.75, 1.0), parent=root)
+    C.make_empty("Seat", location=(0.75, 0.15, -0.35), parent=root)   # left side = Blender +X = Unity -X
+    return root
+
+
+ENV = {"Pedestal": pedestal, "Bubble": bubble, "ShopKiosk": shop_kiosk, "Heli": heli}
 
 
 def build():

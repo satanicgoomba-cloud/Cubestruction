@@ -42,7 +42,16 @@ namespace Cubestruction.Voxels
         float _islandCheckAt = -1;
         ulong _lastInstigator;
 
-        void Awake() { Instance = this; }
+        /// <summary>Loot voxels (cell indices). Server writes; everyone renders them gold.</summary>
+        public NetworkList<int> loot;
+        readonly HashSet<int> _lootSet = new HashSet<int>();
+        bool _wantLoot;
+        public bool IsLoot(int idx) => _lootSet.Contains(idx);
+        public int LootCount => _lootSet.Count;
+        /// <summary>Server, before Spawn: hide loot in this cube (Mining).</summary>
+        public void ServerEnableLoot() => _wantLoot = true;
+
+        void Awake() { Instance = this; loot = new NetworkList<int>(); }
         public override void OnDestroy() { if (Instance == this) Instance = null; base.OnDestroy(); }
 
         // ------------------------------------------------------------------ lifecycle
@@ -59,10 +68,14 @@ namespace Cubestruction.Voxels
         public override void OnNetworkSpawn()
         {
             Build();
+            loot.OnListChanged += OnLootChanged;
+            foreach (var i in loot) _lootSet.Add(i);
+            foreach (var i in _lootSet) MarkCellDirty(i);
             if (IsServer)
             {
                 alive.Value = Grid.Alive;
                 coreAlive.Value = Grid.CoreAlive;
+                if (_wantLoot) ServerPlaceLoot();
             }
             else
             {
@@ -207,8 +220,53 @@ namespace Cubestruction.Voxels
             return Broadcast(instigator);
         }
 
+        void ServerPlaceLoot()
+        {
+            var counts = Loot.CountsFor(Grid.N);
+            var rng = new System.Random(System.Environment.TickCount);
+            int total = Grid.N * Grid.N * Grid.N;
+            var want = (int[])counts.Clone();
+            for (int tries = 0; tries < 400000; tries++)
+            {
+                int idx = rng.Next(total);
+                int li = Grid.layer[idx];
+                if (li >= want.Length || want[li] <= 0 || _lootSet.Contains(idx)) continue;
+                want[li]--;
+                loot.Add(idx);
+                bool done = true; foreach (var w in want) if (w > 0) { done = false; break; }
+                if (done) break;
+            }
+        }
+
+        void OnLootChanged(NetworkListEvent<int> e)
+        {
+            switch (e.Type)
+            {
+                case NetworkListEvent<int>.EventType.Add: _lootSet.Add(e.Value); MarkCellDirty(e.Value); break;
+                case NetworkListEvent<int>.EventType.Remove:
+                case NetworkListEvent<int>.EventType.RemoveAt: _lootSet.Remove(e.Value); break;
+                default:
+                    _lootSet.Clear(); foreach (var i in loot) _lootSet.Add(i);
+                    break;
+            }
+        }
+
+        void MarkCellDirty(int idx)
+        {
+            var c = Grid.Coord(idx);
+            if (_chunks == null) return;
+            _dirty.Add(_chunks[c.x / ChunkSize, c.y / ChunkSize, c.z / ChunkSize]);
+        }
+
         int Broadcast(ulong instigator)
         {
+            if (_lootSet.Count > 0)
+                foreach (var idx in _killed)
+                    if (_lootSet.Remove(idx))
+                    {
+                        loot.Remove(idx);
+                        Loot.ServerGrant(instigator, Grid.layer[idx], CellToWorld(Grid.Coord(idx)));
+                    }
             int money = 0;
             foreach (var idx in _killed) money += Grid.LayerOf(idx).value;
             money = Mathf.RoundToInt(money * valueScale.Value);
