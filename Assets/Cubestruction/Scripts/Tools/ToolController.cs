@@ -162,7 +162,20 @@ namespace Cubestruction.Tools
             if (!IsOwner) return;
             var l = Equipped(true); var r = Equipped(false);
             if (l != null && !_avatar.CanUse(l)) leftTool.Value = -1;
-            if (r == null || !_avatar.CanUse(r)) rightTool.Value = Balance.Tool("Pickaxe").index;
+            if (r == null || !_avatar.CanUse(r)) rightTool.Value = DefaultTool();
+        }
+
+        /// <summary>What the right hand falls back to: the pick if you have it, else the sledgehammer (Titan
+        /// Siege defenders), else whatever is first on your hotbar.</summary>
+        int DefaultTool()
+        {
+            foreach (var id in new[] { "Pickaxe", "SledgeHammer" })
+            {
+                var t = Balance.Tool(id);
+                if (t != null && _avatar.CanUse(t)) return t.index;
+            }
+            var bar = Hotbar();
+            return bar.Count > 0 ? bar[0].index : Balance.Tool("Pickaxe").index;
         }
 
         public void SetTriggers(bool left, bool right) { _left.trigger = left; _right.trigger = right; }

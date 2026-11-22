@@ -943,6 +943,20 @@ namespace Cubestruction
                       && me.ammoRockets.Value == 0, "defenders start with the swing, an empty RPG and a sledgehammer");
                 var map = VoxelCube.Instance;
                 var o = td.Origin;
+                // dig the mine wall yourself, with the real Use button and whatever you're holding at the start
+                Check(me.Tools.Equipped(false)?.id == "SledgeHammer", $"defenders start holding the sledgehammer (holding {me.Tools.Equipped(false)?.id})");
+                {
+                    int vDig = map.alive.Value, ammoBefore = me.ammoBalls.Value + me.ammoRockets.Value;
+                    me.Motor.Teleport(Siege.TitanMap.MineFace(o, 0, 11f) + Vector3.up * 0.2f, 0f);
+                    _aim = Quaternion.identity; _pitch = 5f;
+                    yield return new WaitForSeconds(0.4f);
+                    _holdUse = true; _pulseUse = false;
+                    yield return new WaitForSeconds(4f);
+                    _holdUse = false; _pitch = 0f;
+                    yield return new WaitForSeconds(0.3f);
+                    Check(map.alive.Value < vDig, $"you can dig the mine wall with the sledgehammer ({vDig - map.alive.Value} voxels, carrying {me.ammoBalls.Value} cannonballs / {me.ammoRockets.Value} rockets)");
+                }
+
                 // carry cannonballs to a cannon: standing there loads them
                 int t = td.wall.Value * 4 + 3;
                 me.ammoBalls.Value = 3;
