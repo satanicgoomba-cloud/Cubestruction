@@ -11,7 +11,7 @@ Players on **Meta Quest (VR)**, **PC**, **Mac** and **Mobile** can play together
 |---|---|---|
 | **Mining** (co-op, 1–6) | everyone | Clear every voxel. Inner layers pay more and are harder. The MVP is whoever cleared the most. |
 | **God Siege** (1 v many) | VR = **God**; everyone else votes **Raider** (on foot, with tools and the shop) or **Minion Caster** (one is picked at random from the volunteers) | The Caster sends ever-stronger waves of units (Age of War style) while Raiders dig; together they must destroy the Core. The God (a giant sun with shades and human hands) defends for 15 minutes with gesture skills and grabs, swats and squashes anything. Mana regen +15% per Raider. |
-| **Titan Siege** (always ≥ 5 v 1) | VR = **Titan** (no headset: an **AI Titan**); everyone else **defends**, bots fill the team to 5 | The Titan smashes through three walls (Stone, Crystal, Magma) and the voxel town between them. Defenders man cannons, artillery and rocket pods (stand next to one to load it, Use to fire), and have an RPG, web-swing and a jetpack. Kill the Titan before the third wall falls. |
+| **Titan Siege** (always ≥ 5 v 1) | VR = **Titan** (no headset: an **AI Titan**); everyone else **defends**, bots fill the team to 5 | The Titan starts as a little Buddy at the foot of the first wall; when the prep time ends they bite their hand and lightning makes them a Titan. It smashes through three thick walls (Stone, Crystal, Magma) and the packed voxel towns between them. Defenders dig the mine wall on top of their wall for cannonballs, rockets and hidden guns, carry the ammo to cannons, artillery and rocket pods, and fire their RPG. Kill the Titan before the third wall falls. |
 
 ![Buddies](Docs/previews/buddy.png)
 ![Tools](Docs/previews/tools.png)
@@ -41,7 +41,7 @@ needed. Blender is optional: the generated models are committed.
      `Unity -batchmode -buildTarget Android -projectPath . -executeMethod Cubestruction.EditorTools.QuestBuild.BuildAll`
    - Mac/PC: a normal standalone build (`-novr` forces flat mode with a headset attached, `-mobileui` forces touch UI).
 5. **Online play (Relay):** link a Unity Cloud project in *Project Settings ▸ Services*. LAN needs nothing.
-6. **Smoke test:** launch any desktop build with `-autotest`. It hosts a LAN game (port 7790), runs ~117 checks
+6. **Smoke test:** launch any desktop build with `-autotest`. It hosts a LAN game (port 7790), runs ~130 checks
    (mining, swinging, every weapon, loot, killstreaks, supers, God Siege, Titan Siege, hotbar); `-shotdir <folder>` saves screenshots of the giants and logs `[AutoTest] PASS/FAIL` lines,
    then quits (exit code 1 on failure).
 
@@ -87,13 +87,20 @@ supers take over the Use button while active (charge, aim, throw, punch).
 
 Desktop fallback: LMB grab/throw, 1–6 throw at the crosshair, K Sun Wave, C clap.
 
-**Titan (VR, Titan Siege):** 7× scale, slow and heavy. Drag your hands through walls to scrape them (no cooldown);
-a fast punch dents harder the faster you swing; walking into a wall grinds it with your legs; **A / X kick**
-(you plant and swing a huge kick). Swat incoming shots with a fast hand. Desktop fallback: LMB punch, hold RMB scrape, F kick.
+**Titan (VR, Titan Siege):** you start as a little Buddy. When the prep time ends, **bite your hand** (bring a hand to
+your mouth) and lightning turns you into a 7× Titan. Drag your hands through walls to scrape them (no cooldown);
+a fast punch dents harder the faster you swing; walking into a wall grinds it with your legs; **A / X kick**.
+Swat cannonballs with a fast hand; an **open hand blocks an RPG** (a quarter of the damage), a **closed fist catches it**
+and letting go throws it back; **grip a defender** to pick them up and throw them. Guard your **nape** (triple damage).
+Below 50% health you're enraged, below 25% berserk: faster and harder-hitting, steaming.
+Desktop fallback: B bite, LMB punch, hold RMB scrape, F kick, hold G to catch.
 
-**Defender (Titan Siege):** stand at a turret to load it (do it during the 40 s prep!), Use fires it at the Titan.
-Away from turrets: RPG (Use), **hold Q to web-swing** (webs stick to an invisible ceiling 20 voxels above the walls
-and last 3 s each), RMB jetpack.
+**Defender (Titan Siege):** you start with the web-swing, an **empty** RPG and a sledgehammer (plus a short jetpack).
+Dig the green **mine wall** along the back of your wall for **cannonballs and rockets** (and gold voxels hide guns that hurt
+the Titan); you can't break the wall itself. Stand at a turret to load what you carry into it (cannons and artillery
+take cannonballs, rocket pods take rockets), Use fires it. Your RPG fires the rockets you carry. **Hold Q to web-swing**
+(webs stick to an invisible ceiling 20 voxels above the walls and last 3 s each) to get behind the Titan and hit its nape.
+The end screen shows everyone's damage, nape hits, ammo mined and loaded, and an MVP.
 
 **Commander (Siege):** WASD/drag to pan, wheel/pinch to zoom, Q/E rotate. Unit buttons at the bottom (hotkeys 1–6), pick one of 3 portals.
 
