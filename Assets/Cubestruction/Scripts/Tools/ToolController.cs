@@ -218,8 +218,9 @@ namespace Cubestruction.Tools
             }
         }
 
-        /// <summary>Spider-Man anchor: a bit ahead of you (the way you're moving, not the way you look)
-        /// and high above, on the invisible ceiling, unless something solid is in the way first.</summary>
+        /// <summary>Spider-Man anchor: high above and a bit ahead in the direction you're steering (or facing,
+        /// if you're not pressing a direction), on the invisible ceiling, unless something solid is in the way.
+        /// Your current momentum doesn't decide it, so you can turn from one web to the next.</summary>
         bool SkyAnchor(out Vector3 anchor)
         {
             anchor = default;
@@ -229,11 +230,14 @@ namespace Cubestruction.Tools
             var chest = _motor.Chest;
             float h = ceil - chest.y;
             if (h < 2.5f * s) return false;   // already up at the ceiling
-            var v = _motor.Velocity; v.y = 0;
             Vector3 fwd;
-            if (v.magnitude > 1.5f * s) fwd = v.normalized;
-            else if (_motor.moveIntent.sqrMagnitude > 0.04f) fwd = _motor.moveIntent.normalized;
-            else fwd = Vector3.ProjectOnPlane(swingAim.direction, Vector3.up).normalized;
+            if (_motor.moveIntent.sqrMagnitude > 0.04f) fwd = _motor.moveIntent.normalized;      // steering (relative to your view)
+            else
+            {
+                // facing: the camera on PC/mobile, the head in VR (the web hand can point anywhere)
+                var look = _avatar.IsVR ? _avatar.headAnchor.forward : swingAim.direction;
+                fwd = Vector3.ProjectOnPlane(look, Vector3.up).normalized;
+            }
             if (fwd.sqrMagnitude < 0.01f) fwd = transform.forward;
             float ahead = Mathf.Clamp(h * 0.35f, 1.5f * s, 7f * s);
             anchor = new Vector3(chest.x, ceil, chest.z) + fwd * ahead;

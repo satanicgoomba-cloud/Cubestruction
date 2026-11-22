@@ -387,7 +387,7 @@ def sim_siege(skill, seed=1, verbose=False):
 # map or the Titan's attacks change; the damage/HP/ammo numbers come from titan.json.
 TITAN_BENCH = {
     # unopposed AI Titan: seconds to break wall 1, then town 1 + wall 2, then town 2 + wall 3
-    "breach": [59.0, 123.0, 140.0],
+    "breach": [72.0, 93.0, 136.0],
     "town_share": [0.0, 0.30, 0.28],     # part of each leg spent crossing town (turrets can't reach early on)
     "dig_voxels_per_s": 4.2,              # sledgehammer on the mine wall
     "mine_cells_per_wall": 96 * 4 * 7,
@@ -418,7 +418,7 @@ def sim_titan_match(T, humans, bots, human_titan, rng, titan_skill=None, def_ski
     speed = (0.75 + 0.6 * tsk) if human_titan else rng.uniform(0.9, 1.1)     # vs the AI bench
     block = (0.10 + 0.30 * tsk) if human_titan else B["ai_block"]                    # share of RPGs blocked or caught
     deflect = (0.05 + 0.15 * tsk) if human_titan else 0.0                    # turret shots swatted
-    disrupt = (0.05 + 0.15 * tsk) if human_titan else 0.08                   # defender time lost to knocks/grabs at the wall
+    disrupt = (0.08 + 0.22 * tsk) if human_titan else 0.12                   # defender time lost to knocks, climb-and-grab throws at the wall
     hp_max = T["baseHp"] + T["hpPerDefender"] * (humans + bots * T["botHpFactor"])
     if not human_titan: hp_max *= T.get("aiHpMultiplier", 1.0)
     hp = hp_max

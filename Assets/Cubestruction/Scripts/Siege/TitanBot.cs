@@ -17,6 +17,11 @@ namespace Cubestruction.Siege
 
         /// <summary>Changes every punch/kick: 1 = left punch, 2 = right punch, 3 = kick (low 2 bits), counter above.</summary>
         public readonly NetworkVariable<int> action = new NetworkVariable<int>();
+        /// <summary>Where the right hand is reaching (climb-and-grab), or zero.</summary>
+        public readonly NetworkVariable<Vector3> reach = new NetworkVariable<Vector3>();
+        // server: climb up the wall face and snatch a defender off the walkway
+        float _grabCheckAt, _climbUntil, _heldUntil; ulong _victim = ulong.MaxValue; bool _climbing;
+        public static int AiGrabs;   // -autotest
 
         public TitanBody Body { get; private set; }
         /// <summary>When a rocket reaches its hand: catch it about a third of the time (else it blocks).</summary>
@@ -84,6 +89,7 @@ namespace Cubestruction.Siege
             _vy = _cc.isGrounded ? -1f : _vy - 30f * dt;
             if (transform.position.y < o.y - 8f) { Teleport(TitanMap.TitanStart(o) + Vector3.forward * 2f); return; }
             if (d.prep.Value) { _cc.Move(Vector3.up * _vy * dt); return; }
+            if (TickClimbGrab(d, s, o, dt)) return;
 
             // head for a spot just in front of the current wall; once there (or stuck on a house) start smashing
             int w = Mathf.Min(d.wall.Value, TitanMap.Walls.Length - 1);
@@ -141,6 +147,80 @@ namespace Cubestruction.Siege
             }
         }
 
+        /// <summary>Every few seconds at a wall: if a defender stands near the front edge above, climb the face
+        /// (up to the same height limit as a player Titan), grab them, and fling them back into the field.</summary>
+        bool TickClimbGrab(TitanDirector d, float s, Vector3 o, float dt)
+        {
+            int w = Mathf.Min(d.wall.Value, TitanMap.Walls.Length - 1);
+            float nearZ = TitanMap.WallNearZ(o, w);
+            bool atFace = transform.position.z > nearZ - 0.6f * s && transform.position.z < nearZ;
+            if (!_climbing)
+            {
+                if (!atFace || Time.time < _grabCheckAt) return false;
+                _grabCheckAt = Time.time + Random.Range(5f, 9f);
+                var target = FindVictim(d, out _victim);
+                if (!target.HasValue) return false;
+                _climbing = true; _climbUntil = Time.time + 5f; _heldUntil = -1;
+                reach.Value = target.Value;
+            }
+            float topY = o.y + TitanMap.Walls[w].height * TitanMap.CellSize;
+            float capFeet = topY - TitanController.ClimbHeadroom * s;
+            // haul up the face
+            if (transform.position.y < capFeet - 0.05f && _heldUntil < 0)
+                _cc.Move(Vector3.up * Mathf.Min(4f * dt, capFeet - transform.position.y));
+            if (_heldUntil < 0)
+            {
+                var victimPos = VictimPos(d, _victim);
+                if (victimPos.HasValue) reach.Value = victimPos.Value;
+                if (victimPos.HasValue && Vector3.Distance(_right.position, victimPos.Value) < 0.25f * s + 1.2f && d.ServerGrabDefender(_victim, false))
+                { _heldUntil = Time.time + 0.8f; AiGrabs++; }
+                else if (Time.time > _climbUntil) { EndClimb(); }
+            }
+            else
+            {
+                reach.Value = transform.position + transform.forward * 0.2f * s + Vector3.up * 0.95f * s;   // lift them up...
+                if (Time.time >= _heldUntil)
+                {
+                    // ...and fling them back over its shoulder into the field
+                    var throwV = new Vector3(Random.Range(-6f, 6f), 12f, -20f);
+                    d.ServerReleaseDefender(_victim, throwV);
+                    EndClimb();
+                }
+            }
+            return _climbing;
+        }
+
+        void EndClimb()
+        {
+            _climbing = false; _victim = ulong.MaxValue; reach.Value = Vector3.zero;
+            _vy = 0;   // drop back down
+        }
+
+        Vector3? FindVictim(TitanDirector d, out ulong id)
+        {
+            ulong found = ulong.MaxValue;
+            float best = 7f; Vector3? at = null;
+            var me = transform.position;
+            foreach (var p in Player.PlayerAvatar.All)
+                if (p.role.Value == PlayerRole.Defender) Try(p.OwnerClientId, p.Motor.Chest);
+            foreach (var b in FindObjectsByType<DefenderBot>(FindObjectsSortMode.None)) Try(b.BotId, b.transform.position + Vector3.up * 0.5f);
+            void Try(ulong who, Vector3 p)
+            {
+                float lateral = Mathf.Abs(p.x - me.x), ahead = p.z - me.z;
+                if (p.y < me.y + 4f || ahead < 0f || ahead > 7f) return;   // up on the wall, just in front
+                if (lateral < best) { best = lateral; at = p; found = who; }
+            }
+            id = found;
+            return at;
+        }
+
+        static Vector3? VictimPos(TitanDirector d, ulong id)
+        {
+            if (Player.PlayerAvatar.ByClient.TryGetValue(id, out var p)) return p.Motor.Chest;
+            foreach (var b in FindObjectsByType<DefenderBot>(FindObjectsSortMode.None)) if (b.BotId == id) return b.transform.position + Vector3.up * 0.5f;
+            return null;
+        }
+
         /// <summary>Look for voxels just in front of the body (a shell around the capsule's front half) and
         /// punch the nearest one: the leftovers between punch lanes that stop it squeezing through.</summary>
         bool PunchBlocker(TitanDirector d, VoxelCube cube, float s)
@@ -196,6 +276,14 @@ namespace Cubestruction.Siege
                 var hit = new Vector3(_punchHand == 0 ? -0.12f : 0.12f, 0.6f, 0.62f);
                 if (_punchHand == 0) l = Vector3.Lerp(l, hit, k); else r = Vector3.Lerp(r, hit, k);
                 if (_punchT >= 1f) _punchT = -1;
+            }
+            // climbing to grab: the right hand reaches for its victim
+            if (reach.Value != Vector3.zero)
+            {
+                var local = transform.InverseTransformPoint(reach.Value);
+                r = Vector3.ClampMagnitude(local - new Vector3(0.18f, 0.72f, 0), 0.4f) + new Vector3(0.18f, 0.72f, 0);
+                _left.localPosition = l; _right.localPosition = r;
+                return;
             }
             // a hand comes up to meet an incoming rocket (block it, or catch it)
             float s = transform.localScale.x;

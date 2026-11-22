@@ -111,7 +111,7 @@ namespace Cubestruction.Voxels
             int n = size.Value;
             if (shapeMode.Value == 1) cellSize = Siege.TitanMap.CellSize;
             Grid = shapeMode.Value == 1
-                ? new VoxelGrid(Siege.TitanMap.SizeX, hpScale.Value, Siege.TitanMap.Shape(), Siege.TitanMap.SizeY, Siege.TitanMap.SizeZ, Siege.TitanMap.HpMultiplier(Balance.Titan.wallHpMultiplier))
+                ? new VoxelGrid(Siege.TitanMap.SizeX, hpScale.Value, Siege.TitanMap.Shape(), Siege.TitanMap.SizeY, Siege.TitanMap.SizeZ, Siege.TitanMap.HpMultiplier(Balance.Titan.wallHpMultiplier), Siege.TitanMap.IsTopProtected)
                 : new VoxelGrid(n, hpScale.Value);
             // local origin = bottom centre
             int cx = Mathf.CeilToInt(Grid.NX / (float)ChunkSize), cy = Mathf.CeilToInt(Grid.NY / (float)ChunkSize), cz = Mathf.CeilToInt(Grid.NZ / (float)ChunkSize);

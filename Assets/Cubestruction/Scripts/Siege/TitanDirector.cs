@@ -42,9 +42,11 @@ namespace Cubestruction.Siege
         public static float BaseHp => T.baseHp;
         public static float HpPerDefender => T.hpPerDefender;
         public static float RpgDamage => T.rpgDamage;
-        public const float ScrapeRadius = 1.3f, ScrapeDamage = 20f;
+        public const float ScrapeRadius = 1.3f;
+        public static float ScrapeDamage => T.scrapeDamage;
         public const float PunchMinSpeed = 2.0f;       // real m/s of the hand (world speed / scale)
-        public const float PunchDamage = 500f, KickDamage = 700f;
+        public static float PunchDamage => T.punchDamage;
+        public static float KickDamage => T.kickDamage;
         /// <summary>Instigator id for the Titan's voxel damage (the only damage walls take in this mode).</summary>
         public const ulong TitanInstigator = ulong.MaxValue - 2;
         public static int MaxBalls => T.maxBalls;
@@ -181,8 +183,8 @@ namespace Cubestruction.Siege
             // only the Titan breaks walls and town; defenders (people and bots) can only dig the mine walls
             cube.ProtectFilter = (idx, who) =>
             {
-                if (who == TitanInstigator) return false;
                 var c = cube.Grid.Coord(idx);
+                if (who == TitanInstigator) return TitanMap.IsTopProtected(c.x, c.y, c.z);   // the Titan can't take the walkway away
                 return !TitanMap.IsMine(c.x, c.y, c.z);
             };
             cube.OnCellsDestroyedServer -= OnCellsDestroyed;
@@ -785,7 +787,7 @@ namespace Cubestruction.Siege
             {
                 // a real punch: the harder you swing, the bigger the dent (pushed in along the swing)
                 _punchReady[limb] = Time.time + 0.25f;
-                float r = Mathf.Clamp(2.2f + (real - PunchMinSpeed) * 1.3f, 2.2f, 5.5f) * (1f + 0.15f * rage.Value);
+                float r = Mathf.Clamp(T.punchRadiusMin + (real - PunchMinSpeed) * T.punchRadiusPerMps, T.punchRadiusMin, T.punchRadiusMax) * (1f + 0.15f * rage.Value);
                 var into = velocity.normalized * r * 0.5f * _cube.cellSize;
                 _cube.ServerDamage(point + into, r, PunchDamage * (1f + 0.3f * rage.Value), 5, false, TitanInstigator);
                 FxHub.Instance?.ShockwaveRpc(point, r * _cube.cellSize * 1.4f);

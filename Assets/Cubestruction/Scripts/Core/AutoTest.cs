@@ -153,6 +153,8 @@ namespace Cubestruction
                       $"sky anchor sits 20 voxels above the cube (anchor y {anchor.y - baseY:0.0} m, cube top {cube.Grid.N * cube.cellSize:0.0} m)");
                 float ahead = Vector3.ProjectOnPlane(anchor - me.transform.position, Vector3.up).magnitude;
                 Check(ahead > 1f && ahead < 8f, $"anchor is a bit in front, nearly overhead ({ahead:0.0} m ahead)");
+                var aheadDir = Vector3.ProjectOnPlane(anchor - me.transform.position, Vector3.up).normalized;
+                Check(Vector3.Dot(aheadDir, Vector3.right) > 0.9f, $"standing still, the web goes the way you face ({aheadDir})");
                 yield return new WaitForSeconds(0.9f);
                 float lifted = me.transform.position.y - y0;
                 Check(lifted > 1.5f, $"the rope lifts you off the ground ({lifted:0.0} m)");
@@ -173,8 +175,13 @@ namespace Cubestruction
                 Check(!me.Motor.IsGrappling, "holding on doesn't re-web (no hanging in the sky)");
                 _swing = false;
                 yield return null; yield return null;
+                _pump = Vector3.back;   // steering the other way: the next web goes that way, whatever your momentum
                 _swing = true;   // fresh press: a new web, letting go flings you
-                yield return new WaitForSeconds(0.6f);
+                yield return new WaitForSeconds(0.1f);
+                var steerDir = Vector3.ProjectOnPlane(me.Motor.RopeAnchor - me.transform.position, Vector3.up).normalized;
+                Check(me.Motor.IsGrappling && Vector3.Dot(steerDir, Vector3.back) > 0.7f, $"steering picks the next web's direction ({steerDir})");
+                _pump = Vector3.zero;
+                yield return new WaitForSeconds(0.5f);
                 bool rewebbed = me.Motor.IsGrappling;
                 _swing = false;
                 yield return null; yield return null;
@@ -848,10 +855,10 @@ namespace Cubestruction
                 yield return new WaitForSeconds(0.4f);
                 int w0 = map.alive.Value, sc0 = Siege.TitanDirector.Scrapes;
                 var wallFace = new Vector3(o.x, o.y + 3f, nearZ + 0.2f);
-                for (int k = 0; k < 6; k++) { td.TitanHitRpc(wallFace + Vector3.right * k * 0.3f, Vector3.right * 0.6f * 7f, 0); yield return new WaitForSeconds(0.07f); }
+                for (int k = 0; k < 8; k++) { td.TitanHitRpc(wallFace + Vector3.right * k * 0.05f, Vector3.right * 0.6f * 7f, 0); yield return new WaitForSeconds(0.07f); }
                 yield return new WaitForSeconds(0.3f);
                 int scraped = w0 - map.alive.Value;
-                Check(Siege.TitanDirector.Scrapes > sc0 && scraped > 0, $"a slow hand scrapes the wall ({scraped} voxels from 6 scrapes, no cooldown)");
+                Check(Siege.TitanDirector.Scrapes > sc0 && scraped > 0, $"a slow hand grinds into the wall ({scraped} voxels from 8 scrapes, no cooldown)");
                 int w1 = map.alive.Value;
                 td.TitanHitRpc(wallFace + Vector3.up * 1.5f, Vector3.forward * 4.5f * 7f, 1);
                 yield return new WaitForSeconds(0.5f);
@@ -861,6 +868,34 @@ namespace Cubestruction
                 td.KickRpc(false);
                 yield return new WaitForSeconds(0.9f);
                 Check(Siege.TitanDirector.Kicks > kicks0 && map.alive.Value < w2, $"a kick smashes the wall ({w2 - map.alive.Value} voxels)");
+
+                // the wall top can't be taken away: not by punching it, not by tunnelling under it
+                {
+                    var W = Siege.TitanMap.Walls[0];
+                    int topCells() { int c = 0; for (int tx = 40; tx < 56; tx++) for (int tz = W.z0; tz < W.Z1; tz++) for (int ty = W.height - 2; ty < W.height; ty++) if (g.IsSolid(tx, ty, tz)) c++; return c; }
+                    int top0 = topCells();
+                    var walkTop = Siege.TitanMap.WallTop(o, 0, 0f) - Vector3.up * 0.4f;
+                    map.ServerDamage(walkTop, 4f, 1e5f, 5, false, Siege.TitanDirector.TitanInstigator);
+                    // carve everything under the top at x 40..56, the whole thickness
+                    for (int cx = 40; cx < 56; cx += 3) for (int cy = 1; cy < W.height - 2; cy += 3) for (int cz = W.z0; cz < W.Z1; cz += 3)
+                        map.ServerDamage(map.CellToWorld(new Vector3Int(cx, cy, cz)), 2.2f, 1e5f, 5, false, Siege.TitanDirector.TitanInstigator);
+                    yield return new WaitForSeconds(1.5f);   // island check
+                    Check(topCells() == top0, $"the walkway survives punches and tunnelling underneath ({topCells()}/{top0} top cells)");
+                }
+
+                // climbing: allowed, but capped below the top, and never over the wall
+                {
+                    float topY = o.y + Siege.TitanMap.Walls[0].height * Siege.TitanMap.CellSize;
+                    float cap = topY - Siege.TitanController.ClimbHeadroom * Siege.TitanDirector.Scale;
+                    me.Motor.Teleport(new Vector3(o.x + 8f, topY + 2f, nearZ - 2.5f), 0f);
+                    yield return null; yield return null;
+                    Check(me.transform.position.y <= cap + 0.05f, $"a climbing Titan stops below the wall top (feet {me.transform.position.y - o.y:0.0} m, cap {cap - o.y:0.0} m, top {topY - o.y:0.0} m)");
+                    me.Motor.Teleport(new Vector3(o.x + 8f, cap - 0.5f, nearZ - 1.2f), 0f);
+                    yield return null; yield return null;
+                    Check(me.transform.position.z <= nearZ - me.Motor.Controller.radius * Siege.TitanDirector.Scale + 0.05f, "up on the face, the Titan can't push past the wall");
+                    me.Motor.Teleport(new Vector3(o.x, o.y + 0.2f, nearZ - 2.2f), 0f);
+                    yield return new WaitForSeconds(0.5f);
+                }
 
                 // weak spot, blocking, catching, guns
                 var body = td.Body;
@@ -991,6 +1026,19 @@ namespace Cubestruction
                 float stand = Siege.TitanMap.WallNearZ(o, 0) - 0.42f * Siege.TitanDirector.Scale;
                 Check(z1 > z0 + 1f && z1 > stand - 1.5f, $"the AI Titan marches up to the wall ({z0:0} -> {z1:0} m, wall face at {Siege.TitanMap.WallNearZ(o, 0):0})");
                 Check(map.alive.Value < v0 && Siege.TitanBot.Punches > 0, $"the AI Titan smashes the wall ({v0 - map.alive.Value} voxels, {Siege.TitanBot.Punches} punches)");
+                // stand at the front edge right above it: it climbs up and grabs someone
+                if (bot)
+                {
+                    int grabs0 = Siege.TitanBot.AiGrabs;
+                    var edge = new Vector3(bot.transform.position.x, o.y + Siege.TitanMap.Walls[0].height * Siege.TitanMap.CellSize + 0.3f, Siege.TitanMap.CellZ(o, Siege.TitanMap.Walls[0].z0 + 1.5f));
+                    for (float tt = 0; tt < 14f && Siege.TitanBot.AiGrabs == grabs0; tt += 0.5f)
+                    {
+                        if (me.Motor.heldBy == null && me.transform.position.y < edge.y - 2f) me.Motor.Teleport(edge, 180f);
+                        yield return new WaitForSeconds(0.5f);
+                    }
+                    Check(Siege.TitanBot.AiGrabs > grabs0, $"the AI Titan climbs up and grabs a defender off the wall ({Siege.TitanBot.AiGrabs - grabs0})");
+                    yield return new WaitForSeconds(2f);
+                }
                 Check(Siege.TitanDirector.AmmoLoaded > 0, $"bots haul ammo to the turrets ({Siege.TitanDirector.AmmoLoaded} rounds loaded, {Siege.DefenderBot.TurretShots} bot turret shots, {Siege.DefenderBot.RocketsFired} bot RPGs)");
                 Log($"AI Titan after ~14 s of fighting: {td.titanHp.Value:0}/{td.titanMaxHp.Value:0} HP, wall {td.wall.Value + 1}, {Siege.TitanDirector.Blocks} blocks, {Siege.TitanDirector.Catches} catches");
                 mm.ServerEndMatch("autotest");

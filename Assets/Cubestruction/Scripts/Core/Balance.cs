@@ -170,6 +170,12 @@ namespace Cubestruction
         public float baseHp, hpPerDefender, botHpFactor = 0.6f, regenPerSecond, regenDelay = 4;
         /// <summary>The AI Titan's health multiplier (it's less nimble than a person in VR).</summary>
         public float aiHpMultiplier = 1f;
+        /// <summary>Damage of one scrape tick (a hand dragged along a wall, 12 per second per hand).</summary>
+        public float scrapeDamage = 150;
+        /// <summary>A hard punch (centre; half at the edge of the dent) and a kick (explosive falloff).</summary>
+        public float punchDamage = 1500, kickDamage = 2100;
+        /// <summary>Punch dent radius in voxels: min + perMps × (hand speed − 2 m/s), up to max.</summary>
+        public float punchRadiusMin = 2.2f, punchRadiusPerMps = 1.3f, punchRadiusMax = 5.5f;
         public float napeMultiplier = 3, blockMultiplier = 0.25f, rpgDamage;
         public float ballChance, rocketChance; public int maxBalls = 8, maxRockets = 10, gunsPerMineWall = 6;
         public TurretTuning cannon, artillery, rocketPod;

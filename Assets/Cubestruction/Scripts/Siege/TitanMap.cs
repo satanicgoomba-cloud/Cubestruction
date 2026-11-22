@@ -176,6 +176,15 @@ namespace Cubestruction.Siege
             return false;
         }
 
+        /// <summary>The top of a wall (its top two rows, the battlements and the mine wall): the Titan can't break
+        /// it and it never collapses, so defenders always keep their walkway and turrets.</summary>
+        public static bool IsTopProtected(int x, int y, int z)
+        {
+            foreach (var w in Walls)
+                if (z >= w.z0 && z < w.Z1 && y >= w.height - 2) return true;
+            return false;
+        }
+
         /// <summary>Which wall's mine wall a cell is in (-1 if none).</summary>
         public static int MineWallOf(int z)
         {

@@ -33,7 +33,10 @@ namespace Cubestruction.Voxels
         /// <summary>Optional per-cell HP multiplier by position (Titan Siege walls); kept so Restore/MaxHp agree.</summary>
         readonly Func<int, int, int, float> hpMul;
 
-        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null, int ny = -1, int nz = -1, Func<int, int, int, float> hpMul = null)
+        /// <summary>Cells that count as resting on the floor (Titan Siege wall tops: they never collapse).</summary>
+        readonly bool[] anchor;
+
+        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null, int ny = -1, int nz = -1, Func<int, int, int, float> hpMul = null, Func<int, int, int, bool> anchored = null)
         {
             this.hpMul = hpMul;
             N = NX = n; NY = ny > 0 ? ny : n; NZ = nz > 0 ? nz : n;
@@ -67,6 +70,7 @@ namespace Cubestruction.Voxels
                 int idx = Index(x, y, z);
                 layer[idx] = (byte)li;
                 hp[idx] = L[li].hp * hpScale * (hpMul != null ? hpMul(x, y, z) : 1f);
+                if (anchored != null && anchored(x, y, z)) { if (anchor == null) anchor = new bool[count]; anchor[idx] = true; }
                 solid[idx] = true;
                 alive++;
                 if (y + 1 > top) top = y + 1;
@@ -165,6 +169,9 @@ namespace Cubestruction.Voxels
                 int idx = Index(x, 0, z);
                 if (solid[idx]) { _visited[idx] = true; _bfs.Enqueue(idx); }
             }
+            if (anchor != null)
+                for (int i = 0; i < count; i++)
+                    if (anchor[i] && solid[i] && !_visited[i]) { _visited[i] = true; _bfs.Enqueue(i); }
             int nn = NY * NZ;
             while (_bfs.Count > 0)
             {
@@ -224,7 +231,7 @@ namespace Cubestruction.Voxels
             {
                 int idx = _dfs.Pop();
                 int z = idx % NZ, y = (idx / NZ) % NY, x = idx / nn;
-                if (y == 0) { grounded = true; break; }
+                if (y == 0 || (anchor != null && anchor[idx])) { grounded = true; break; }
                 // push the downward step last so it is explored first
                 grounded |= Push(idx + 1, z < NZ - 1, visit); grounded |= Push(idx - 1, z > 0, visit);
                 grounded |= Push(idx + nn, x < NX - 1, visit); grounded |= Push(idx - nn, x > 0, visit);

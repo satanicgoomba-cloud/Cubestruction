@@ -105,12 +105,16 @@ namespace Cubestruction.Siege
         void Update()
         {
             var d = TitanDirector.Instance;
-            _motor.climbHeld = false;            // giants (and Buddies about to be giants) don't climb
-            _motor.climbDelta = Vector3.zero;
             _motor.reelIn = false;
-            if (d == null || !d.IsActive) { UpdateLabel(d); return; }
-
-            if (!Transformed) { TickBuddy(d); UpdateLabel(d); return; }
+            if (d == null || !d.IsActive || !Transformed)
+            {
+                _motor.climbHeld = false;        // the little Buddy can't climb the wall
+                _motor.climbDelta = Vector3.zero;
+                if (d != null && d.IsActive) TickBuddy(d);
+                UpdateLabel(d);
+                return;
+            }
+            // the Titan may climb (VR grip / desktop hold E), up to a height limit (see LateUpdate)
 
             // just bitten: grow into the Titan over 1.5 s (rooted while it happens)
             if (_grownAt < 0) _grownAt = Time.time;
@@ -141,6 +145,41 @@ namespace Cubestruction.Siege
                 if (_grabbed[i] == ulong.MaxValue) Limb(d, (byte)i, h.t.position, h.velocity);
             }
         }
+
+        // ------------------------------------------------------------------ climbing limits
+
+        /// <summary>Climbing is allowed, but the wall ahead stays in the way: the Titan's feet can't rise above a
+        /// limit (high enough for its hands to reach the walkway's front edge, never enough to step on top), and
+        /// while it's off the ground it can't get past the wall's front face. Only breaking through at ground
+        /// level gets it past a wall.</summary>
+        void LateUpdate()
+        {
+            var d = TitanDirector.Instance;
+            if (d == null || !d.IsActive || !Transformed || _grownAt < 0) return;
+            var o = d.Origin;
+            int w = Mathf.Min(d.wall.Value, TitanMap.Walls.Length - 1);
+            float s = _motor.WorldScale;
+            var pos = transform.position;
+            float nearZ = TitanMap.WallNearZ(o, w), farZ = TitanMap.WallFarZ(o, w);
+            if (pos.z < nearZ - 6f * s || pos.z > farZ + 1f) return;   // not at the wall
+            float topY = o.y + TitanMap.Walls[w].height * TitanMap.CellSize;
+            float capFeet = topY - ClimbHeadroom * s;
+            float radius = _motor.Controller.radius * s;
+            bool fix = false;
+            if (pos.y > capFeet) { pos.y = capFeet; fix = true; }
+            // up on the face (above rubble height) and outside its own tunnel: no further in, no climbing over
+            bool climbing = pos.y > o.y + 0.45f * s, outside = transform.position.z < nearZ - radius + 0.5f;
+            if (climbing && outside && pos.z > nearZ - radius) { pos.z = nearZ - radius; fix = true; }
+            if (!fix) return;
+            _motor.Controller.enabled = false;
+            transform.position = pos;
+            _motor.Controller.enabled = true;
+            if (_motor.Velocity.y > 0) _motor.Velocity.y = 0;
+            ClimbCapHits++;
+        }
+        /// <summary>Feet stay this many Titan-metres below the wall top (eyes about level with the walkway).</summary>
+        public const float ClimbHeadroom = 0.83f;
+        public static int ClimbCapHits;   // -autotest
 
         // ------------------------------------------------------------------ the little Buddy phase
 
@@ -249,6 +288,29 @@ namespace Cubestruction.Siege
             if (cam == null) return;
             float s = _motor.WorldScale;
             if (!locked && kb != null && kb.fKey.wasPressedThisFrame) Kick(d, false);
+            // R: grab the defender you're looking at (if they're in reach), let go to throw them where you look
+            if (kb != null && kb.rKey.wasPressedThisFrame && _grabbed[1] == ulong.MaxValue)
+            {
+                var hand = _avatar.rightHand;
+                var aimR = new Ray(cam.transform.position, cam.transform.forward);
+                ulong best = ulong.MaxValue; float bestA = 25f, reach = 1.6f * s;
+                foreach (var p in PlayerAvatar.All)
+                    if (p.role.Value == PlayerRole.Defender) Consider(p.OwnerClientId, p.Motor.Chest);
+                foreach (var b in FindObjectsByType<DefenderBot>(FindObjectsSortMode.None)) Consider(b.BotId, b.transform.position + Vector3.up * 0.5f);
+                void Consider(ulong id, Vector3 at)
+                {
+                    var to = at - aimR.origin;
+                    float a = Vector3.Angle(to, aimR.direction);
+                    if (to.magnitude < reach && a < bestA) { bestA = a; best = id; }
+                }
+                if (best != ulong.MaxValue) { _grabbed[1] = best; d.GrabDefenderRpc(best, false); }
+            }
+            if (kb != null && kb.rKey.wasReleasedThisFrame && _grabbed[1] != ulong.MaxValue)
+            {
+                var v = cam.transform.forward * 22f + Vector3.up * 6f;
+                d.ReleaseDefenderRpc(_grabbed[1], v);
+                _grabbed[1] = ulong.MaxValue;
+            }
             var ray = new Ray(cam.transform.position, cam.transform.forward);
             bool menus = UI.GameMenus.Instance != null && UI.GameMenus.Instance.BlocksGameplayInput;
 
@@ -320,7 +382,7 @@ namespace Cubestruction.Siege
             string bar = new string('|', filled) + new string('.', 10 - filled);
             string state = d.prep.Value ? $"Defenders are loading their guns: {Mathf.CeilToInt(d.prepLeft.Value)}s"
                                         : $"Break wall {d.wall.Value + 1} of 3   {MatchManager.FormatTime(d.timeLeft.Value)}";
-            string hint = IsVR ? "swing through walls: scrape   fast punch: dent   A/X: kick   grip: grab / catch" : "LMB punch   RMB scrape   F kick   hold G: catch";
+            string hint = IsVR ? "swing through walls: scrape   fast punch: dent   A/X: kick   grip: climb / grab / catch" : "LMB punch   RMB scrape   F kick   hold E: climb   R: grab   hold G: catch";
             if (d.rage.Value > 0) hint = (d.rage.Value == 2 ? "BERSERK!  " : "ENRAGED!  ") + hint;
             _label.text = $"TITAN  [{bar}] {hp:0}\n{state}\n<size=28>{hint}</size>";
             _label.color = _hurtFlash > 0 ? new Color(1f, 0.4f, 0.35f) : new Color(1f, 0.92f, 0.8f);

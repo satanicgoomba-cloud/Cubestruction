@@ -93,7 +93,9 @@ a fast punch dents harder the faster you swing; walking into a wall grinds it wi
 Swat cannonballs with a fast hand; an **open hand blocks an RPG** (a quarter of the damage), a **closed fist catches it**
 and letting go throws it back; **grip a defender** to pick them up and throw them. Guard your **nape** (triple damage).
 Below 50% health you're enraged, below 25% berserk: faster and harder-hitting, steaming.
-Desktop fallback: B bite, LMB punch, hold RMB scrape, F kick, hold G to catch.
+Climb an unbroken wall's face (grip, or hold E on desktop) to snatch defenders off the walkway: you can get your
+hands over the battlements, but never your feet onto the top, and you can't get past a wall you haven't broken.
+Desktop fallback: B bite, LMB punch, hold RMB scrape, F kick, hold E climb, R grab (release to throw), hold G to catch.
 
 **Defender (Titan Siege):** you start with the web-swing, an **empty** RPG and a sledgehammer (plus a short jetpack).
 Dig the green **mine wall** along the back of your wall for **cannonballs and rockets** (and gold voxels hide guns that hurt
@@ -118,7 +120,7 @@ The end screen shows everyone's damage, nape hits, ammo mined and loaded, and an
   There's a comfort toggle (*Allow ragdoll*) for VR players.
 - **Movement:** climbing, Gecko Gloves, **Zip Tether swinging** (Spider-Man style: each web goes a little ahead
   of where you're moving, up to an invisible ceiling 20 voxels above the cube, so you can swing forward while
-  shooting sideways; a web lasts 3 s and the next needs a fresh press; pump with the stick, reel in, let go to fling), Hop Boots, Cloud Pack, Boing Pads, Boost Blaster recoil, Warp Kunai, Chain Whip, Bubble Wand
+  shooting sideways (each web goes the way you're steering, or facing if you're not); a web lasts 3 s and the next needs a fresh press; pump with the stick, reel in, let go to fling), Hop Boots, Cloud Pack, Boing Pads, Boost Blaster recoil, Warp Kunai, Chain Whip, Bubble Wand
   rides, rocket-jumping.
 - **Guns fire physics bullets** (gravity, ricochets, piercing); every impact digs. They're simulated on every peer
   from a shared seed and only the server's copy does damage.
@@ -190,14 +192,16 @@ rage, regen) using numbers measured in-game with `-autotest -titanbench` (gun hi
 
 | Line-up | Titan wins | Avg match |
 |---|---:|---:|
-| VR Titan vs you + 4 bots | 47% | 4.2 min |
-| VR Titan vs 3 people + 2 bots | 49% | 4.2 min |
-| VR Titan vs 5 people | 49% | 4.3 min |
-| AI Titan vs you + 4 bots | 51% | 4.9 min |
-| AI Titan vs 3 people + 2 bots | 54% | 4.9 min |
+| VR Titan vs you + 4 bots | 44% | 3.9 min |
+| VR Titan vs 3 people + 2 bots | 51% | 4.0 min |
+| VR Titan vs 5 people | 52% | 4.0 min |
+| AI Titan vs you + 4 bots | 46% | 4.6 min |
+| AI Titan vs 3 people + 2 bots | 50% | 4.6 min |
 
-Titan health = 40,900 + 8,500 per defender (bots count 0.6), ×1.41 for the AI Titan; it regenerates 60/s after
-4 s untouched. Per hit: artillery 1,500, cannon 600, rocket pod 450, RPG 300, guns ~200 DPS each.
+Titan health = 35,500 + 6,700 per defender (bots count 0.6), ×1.52 for the AI Titan; it regenerates 60/s after
+4 s untouched. Per hit on the Titan: artillery 1,500, cannon 600, rocket pod 450, RPG 300, guns ~200 DPS each.
+The Titan's punch does 1,500 in a dent that grows with swing speed, a scrape 150 (12 times a second per hand);
+wall voxels have ~900 HP, and the top two rows, battlements and mine wall can't be broken by the Titan.
 
 ## Balance
 

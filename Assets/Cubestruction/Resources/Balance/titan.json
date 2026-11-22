@@ -2,8 +2,8 @@
   "notes": "Titan Siege tuning. Damage is per hit on the Titan. Tuned with Tools/balance_sim.py titan (Monte Carlo of whole matches using numbers measured in-game with -titanbench). wallHpMultiplier: per wall (1, 2, 3) voxel HP multiplier so walls take real punching (town, battlements stay normal; the mine wall on top is always normal).",
   "prepSeconds": 40,
   "matchSeconds": 600,
-  "baseHp": 40900.0,
-  "hpPerDefender": 8500.0,
+  "baseHp": 35500.0,
+  "hpPerDefender": 6700.0,
   "botHpFactor": 0.6,
   "regenPerSecond": 60,
   "regenDelay": 4,
@@ -65,9 +65,15 @@
     }
   ],
   "wallHpMultiplier": [
-    100,
-    50,
-    22
+    72,
+    30,
+    13
   ],
-  "aiHpMultiplier": 1.41
+  "aiHpMultiplier": 1.52,
+  "scrapeDamage": 150,
+  "punchDamage": 1500,
+  "kickDamage": 2100,
+  "punchRadiusMin": 1.6,
+  "punchRadiusPerMps": 0.9,
+  "punchRadiusMax": 4.5
 }
