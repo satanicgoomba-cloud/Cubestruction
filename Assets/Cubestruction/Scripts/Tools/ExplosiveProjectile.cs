@@ -1,0 +1,154 @@
+using System.Collections.Generic;
+using Cubestruction.Player;
+using Cubestruction.Voxels;
+using Unity.Netcode;
+using UnityEngine;
+
+namespace Cubestruction.Tools
+{
+    /// <summary>
+    /// Grenades, goo bombs, pop sticks, vortex orbs, rockets, fizzy barrels (TNT), pixel charges (C4)
+    /// and the sunburst crate. Server-simulated rigidbody; clients see it through NetworkTransform.
+    /// </summary>
+    [RequireComponent(typeof(Rigidbody), typeof(NetworkObject))]
+    public class ExplosiveProjectile : NetworkBehaviour
+    {
+        public static readonly List<ExplosiveProjectile> Live = new List<ExplosiveProjectile>();
+
+        public readonly NetworkVariable<int> toolIndex = new NetworkVariable<int>(-1);
+        public readonly NetworkVariable<float> fuseLeft = new NetworkVariable<float>();
+
+        public ToolDef Def => Balance.Tool(toolIndex.Value);
+        public ulong Owner { get; private set; }
+
+        Rigidbody _rb;
+        bool _stuck, _exploded;
+        int _pulsesLeft;
+        float _pulseTimer;
+        GameObject _visual;
+
+        void Awake() { _rb = GetComponent<Rigidbody>(); }
+
+        public void ServerInit(ToolDef t, ulong owner, Vector3 velocity)
+        {
+            toolIndex.Value = t.index;
+            Owner = owner;
+            fuseLeft.Value = t.id == "C4" ? float.PositiveInfinity : (t.id == "RocketLauncher" ? 6f : t.fuse);
+            _rb.linearVelocity = velocity;
+            _rb.useGravity = t.id != "RocketLauncher";
+            bool placed = t.cat == ToolCategory.Placed;
+            _rb.isKinematic = placed && velocity.sqrMagnitude < 0.01f;   // placed on a surface
+            _rb.mass = placed ? 6f : 0.4f;
+            _pulsesLeft = t.id == "BlackHoleGrenade" ? Mathf.Max(1, t.pellets) : 0;
+        }
+
+        public override void OnNetworkSpawn()
+        {
+            Live.Add(this);
+            if (!IsServer) _rb.isKinematic = true;
+            toolIndex.OnValueChanged += (_, __) => BuildVisual();
+            BuildVisual();
+        }
+
+        public override void OnNetworkDespawn() { Live.Remove(this); }
+
+        void BuildVisual()
+        {
+            var t = Def;
+            if (t == null || _visual) return;
+            _visual = ToolVisuals.Create(t.id, transform);
+        }
+
+        void Update()
+        {
+            // blinking warning light speeds up as the fuse burns (everyone sees it)
+            if (_visual && !float.IsInfinity(fuseLeft.Value))
+            {
+                float f = fuseLeft.Value;
+                float rate = f < 2 ? 14 : f < 5 ? 6 : 2;
+                float pulse = 1f + 0.08f * Mathf.Max(0, Mathf.Sin(Time.time * rate));
+                _visual.transform.localScale = Vector3.one * pulse;
+            }
+            if (!IsServer || _exploded) return;
+
+            var t = Def;
+            if (t == null) return;
+            if (_pulsesLeft > 0 && fuseLeft.Value <= 0)
+            {
+                // Vortex Orb: hover, pull players in, crush in pulses
+                _rb.isKinematic = true;
+                _pulseTimer -= Time.deltaTime;
+                if (_pulseTimer <= 0)
+                {
+                    _pulseTimer = 0.45f;
+                    _pulsesLeft--;
+                    Explosion.ServerExplode(transform.position, t, Owner, pulse: true);
+                    if (_pulsesLeft == 0) Finish();
+                }
+                return;
+            }
+            fuseLeft.Value -= Time.deltaTime;
+            if (fuseLeft.Value <= 0 && _pulsesLeft == 0) ServerExplode();
+        }
+
+        void OnCollisionEnter(Collision c)
+        {
+            if (!IsServer || _exploded) return;
+            var t = Def; if (t == null) return;
+            if (t.id == "RocketLauncher") { ServerExplode(); return; }
+            if ((t.id == "StickyBomb" || t.id == "C4") && !_stuck && c.collider.GetComponentInParent<ExplosiveProjectile>() == null)
+            {
+                _stuck = true;
+                _rb.isKinematic = true;
+                // stick to players too: ride along with them
+                var pl = c.collider.GetComponentInParent<PlayerAvatar>();
+                if (pl) transform.SetParent(null, true);
+            }
+        }
+
+        public void ServerExplode()
+        {
+            if (_exploded) return;
+            Explosion.ServerExplode(transform.position, Def, Owner, pulse: false);
+            Finish();
+        }
+
+        void Finish()
+        {
+            _exploded = true;
+            NetworkObject.Despawn(true);
+        }
+    }
+
+    public static class Explosion
+    {
+        /// <summary>Server: damage voxels, knock back (and maybe ragdoll) every player nearby, including the thrower.</summary>
+        public static void ServerExplode(Vector3 pos, ToolDef t, ulong owner, bool pulse)
+        {
+            var cube = VoxelCube.Instance;
+            float cell = cube ? cube.cellSize : 0.25f;
+            float radiusM = t.radiusCells * cell;
+            if (cube) cube.ServerDamage(pos, t.radiusCells, t.damage, t.tier, true, owner);
+
+            // players get blasted from further away than voxels break (that's the fun part)
+            float blastR = Mathf.Max(radiusM * 2.2f, 2.5f);
+            foreach (var pl in PlayerAvatar.All)
+            {
+                if (pl.role.Value == PlayerRole.God) continue;
+                var center = pl.transform.position + Vector3.up * 0.5f;
+                var d = center - pos;
+                float dist = d.magnitude;
+                if (dist > blastR) continue;
+                float k = 1f - dist / blastR;
+                var dir = dist > 0.01f ? d / dist : Vector3.up;
+                Vector3 v;
+                if (t.knockback < 0) v = -dir * Mathf.Abs(t.knockback) * k;                // vortex pull
+                else v = (dir + Vector3.up * 0.6f).normalized * t.knockback * k * (pulse ? 0.3f : 1f);
+                if (v.sqrMagnitude > 0.25f) pl.KnockbackRpc(v);
+            }
+            // siege units get thrown too
+            Siege.EnemyUnit.ServerBlast(pos, blastR, t.damage * 0.5f, Mathf.Abs(t.knockback));
+            FxHub.Instance?.ExplosionRpc(pos, radiusM, t.index, pulse);
+        }
+    }
+}
