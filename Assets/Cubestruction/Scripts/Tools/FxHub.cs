@@ -29,19 +29,20 @@ namespace Cubestruction.Tools
         public int LiveBullets => _bullets ? _bullets.LiveCount : 0;
 
         /// <summary>Fires a volley on this peer. <paramref name="authority"/> = this copy damages voxels (server only).</summary>
-        public void FireBullets(ToolDef t, Vector3 origin, Vector3 dir, int seed, ulong owner, bool authority, float scale)
+        public void FireBullets(ToolDef t, Vector3 origin, Vector3 dir, int seed, ulong owner, bool authority, float scale, float size = 0f)
         {
+            if (size > 0f) { t = t.Clone(); t.bulletSize = size; }
             _bullets.Fire(t, origin, dir, seed, owner, authority && IsServer, scale);
             Play(zapClip, origin, t.id == "RailGun" ? 0.7f : 0.25f, t.id == "RailGun" ? 0.7f : t.id == "PinballPopper" ? 1.8f : Random.Range(1.3f, 1.6f));
         }
 
         /// <summary>Server -> other clients: draw a volley someone else fired (the shooter drew theirs already).</summary>
         [Rpc(SendTo.NotServer)]
-        public void BulletsRpc(int tool, Vector3 origin, Vector3 dir, int seed, ulong owner, float scale)
+        public void BulletsRpc(int tool, Vector3 origin, Vector3 dir, int seed, ulong owner, float scale, bool includeOwner = false, float size = 0f)
         {
-            if (NetworkManager.LocalClientId == owner) return;
+            if (NetworkManager.LocalClientId == owner && !includeOwner) return;   // the shooter drew its own
             var t = Balance.Tool(tool);
-            if (t != null) FireBullets(t, origin, dir, seed, owner, false, scale);
+            if (t != null) FireBullets(t, origin, dir, seed, owner, false, scale, size);
         }
 
         public static int LightningBolts;   // -autotest counter
@@ -68,6 +69,22 @@ namespace Cubestruction.Tools
             lr.startColor = new Color(0.85f, 0.95f, 1f); lr.endColor = new Color(0.55f, 0.75f, 1f);
             StartCoroutine(Fade(lr, 0.18f));
             Play(zapClip, points[1], 0.7f, Random.Range(0.8f, 1.1f));
+        }
+
+        /// <summary>Aqua Surge beam segment (refreshed ~10x a second while it fires).</summary>
+        [Rpc(SendTo.ClientsAndHost)]
+        public void SurgeBeamRpc(Vector3 origin, Vector3 dir, float radiusM)
+        {
+            const float len = 30f;
+            var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(c.GetComponent<Collider>());
+            c.GetComponent<MeshRenderer>().material = new Material(glowMaterial) { color = new Color(0.45f, 0.9f, 1f, 0.8f) };
+            c.transform.position = origin + dir * len * 0.5f;
+            c.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
+            c.transform.localScale = new Vector3(radiusM * 2f, len * 0.5f, radiusM * 2f);
+            Destroy(c, 0.13f);
+            Burst(origin + dir * 2f, 6, new Color(0.6f, 0.95f, 1f));
+            if (Time.time >= _impactSfxAt) { _impactSfxAt = Time.time + 0.2f; Play(zapClip, origin, 0.9f, 0.5f); }
         }
 
         /// <summary>Chain Whip lash: a quick sagging line from the hand to the point.</summary>

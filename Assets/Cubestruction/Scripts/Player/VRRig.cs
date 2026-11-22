@@ -173,7 +173,8 @@ namespace Cubestruction.Player
             if (Left.primary.WasPressedThisFrame()) _avatar.Tools.CycleHand(true);
             if (Right.primary.WasPressedThisFrame()) _avatar.Tools.CycleHand(false);
             if (Left.secondary.WasPressedThisFrame() || Right.secondary.WasPressedThisFrame()) UI.GameMenus.Instance?.ToggleShop();
-            _avatar.Tools.SetTriggers(Left.trigger.IsPressed(), Right.trigger.IsPressed());
+            bool tools = !Tools.StreakState.BlocksTools;   // a super mode may own the triggers
+            _avatar.Tools.SetTriggers(tools && Left.trigger.IsPressed(), tools && Right.trigger.IsPressed());
 
             // swing (Zip Tether): the off-hand's trigger shoots a web-line when that hand is empty;
             // jump (right stick click) reels in, release to fling

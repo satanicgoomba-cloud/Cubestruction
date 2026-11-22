@@ -576,6 +576,46 @@ def magnet_glove(p):
     p.sphere((0, -0.03, 0.04), 0.02, GL, segs=8, rings=5)
 
 
+def meteor_dive(p):
+    """Super item: a glowing meteor chunk with a flame tail."""
+    p.sphere((0, -0.05, 0), 0.07, OR, segs=10, rings=6, scale=(1, 1.1, 0.9))
+    for (x, y, z) in ((0.04, -0.09, 0.03), (-0.035, -0.02, 0.05), (0.02, 0.0, -0.05)):
+        p.sphere((x, y, z), 0.025, RD, segs=6, rings=4)
+    p.cyl((0, 0.0, 0), (0, 0.16, 0), 0.06, GR, r2=0.0, segs=10)                       # tail
+
+
+def aqua_surge(p):
+    """Super item: a crackling energy ball between two hands-worth of rings."""
+    p.sphere((0, -0.08, 0), 0.06, GL, segs=12, rings=8)
+    for a in (0, 60, 120):
+        p.torus((0, -0.08, 0), 0.085, 0.006, AQ, matrix=rot(x=a, z=a / 2), segs=14, minor=3)
+
+
+def echo_clones(p):
+    """Super item: three little glass buddies on a base."""
+    p.cyl((0, 0, -0.03), (0, 0, -0.01), 0.09, WH, segs=14)
+    for i, x in enumerate((-0.05, 0.0, 0.05)):
+        m = (AQ, SK, PU)[i]
+        p.capsule((x, 0, -0.005), (x, 0, 0.05), 0.018, m, segs=8)
+        p.sphere((x, 0, 0.08), 0.02, m, segs=8, rings=5)
+
+
+def sun_orb(p):
+    """Super item: a little sun with rays."""
+    p.sphere((0, -0.06, 0), 0.06, YE, segs=12, rings=8)
+    for a in range(0, 360, 45):
+        p.box((0, -0.06, 0), (0.012, 0.17, 0.012), OR, bevel=0.004, matrix=rot(z=a))
+    p.torus((0, -0.06, 0), 0.075, 0.006, GL, matrix=rot(x=90), segs=14, minor=3)
+
+
+def titan_buddy(p):
+    """Super item: a growth potion."""
+    p.sphere((0, 0, 0), 0.055, LI, segs=12, rings=8)
+    p.cyl((0, 0, 0.045), (0, 0, 0.11), 0.018, AQ, segs=10)
+    p.cyl((0, 0, 0.11), (0, 0, 0.13), 0.024, RD, segs=10)                              # cork
+    p.sphere((0.02, -0.03, 0.02), 0.012, WH, segs=6, rings=4)                          # bubble
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -589,7 +629,8 @@ TOOLS = {
     "HeliGunner": heli_gunner, "RaptorMissile": raptor_missile, "GooGun": goo_gun,
     "ChainZapper": chain_zapper, "FireworkLauncher": firework_launcher, "DrillTorpedo": drill_torpedo,
     "FrostRay": frost_ray, "WarpKunai": warp_kunai, "BubbleWand": bubble_wand, "SawYoyo": saw_yoyo,
-    "ChainWhip": chain_whip, "MagnetGlove": magnet_glove,
+    "ChainWhip": chain_whip, "MagnetGlove": magnet_glove, "MeteorDive": meteor_dive, "AquaSurge": aqua_surge,
+    "EchoClones": echo_clones, "SunOrb": sun_orb, "TitanBuddy": titan_buddy,
 }
 
 

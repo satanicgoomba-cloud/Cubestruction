@@ -142,6 +142,8 @@ namespace Cubestruction.Voxels
         public float HalfExtent => Grid.N * cellSize * 0.5f;
         /// <summary>Server: duration of the last floating-island flood fill (perf diagnostics).</summary>
         public static float LastIslandCheckMs;
+        /// <summary>Server: voxels destroyed so far this session (the Sun Orb grows with teamwork).</summary>
+        public static int TotalDestroyed;
         /// <summary>Debug (-autotest): cross-check the local island search against a full flood fill.</summary>
         public static bool VerifyIslands;
         public static int MissedIslandCells;
@@ -375,8 +377,27 @@ namespace Cubestruction.Voxels
             _dirty.Add(_chunks[c.x / ChunkSize, c.y / ChunkSize, c.z / ChunkSize]);
         }
 
+        /// <summary>Aqua Surge: carve a straight tunnel (spheres every ~0.75 radius along the ray).</summary>
+        public int ServerCarveBeam(Vector3 originWorld, Vector3 dirWorld, float lengthM, float radiusCells, float damage, int tier, ulong instigator)
+        {
+            if (!IsServer) return 0;
+            _killed.Clear();
+            var o = WorldToCell(originWorld);
+            var d = transform.InverseTransformDirection(dirWorld).normalized;
+            float step = Mathf.Max(0.5f, radiusCells * 0.75f), len = lengthM / cellSize;
+            int n = Grid.N;
+            for (float s = 0; s <= len; s += step)
+            {
+                var c = o + d * s;
+                if (c.x < -radiusCells || c.y < -radiusCells || c.z < -radiusCells || c.x > n + radiusCells || c.y > n + radiusCells || c.z > n + radiusCells) continue;
+                Grid.ApplySphere(c, radiusCells, damage, tier, false, _killed, DamageFilter);
+            }
+            return FinishKills(instigator);
+        }
+
         int Broadcast(ulong instigator)
         {
+            TotalDestroyed += _killed.Count;
             if (_marks.Count > 0)
                 foreach (var idx in _killed)
                 {

@@ -12,9 +12,11 @@ namespace Cubestruction.Tools
         public static bool WantsCursor;
         /// <summary>Hide the mobile joystick/buttons (Raptor: taps go to the map instead).</summary>
         public static bool HideTouchControls;
+        /// <summary>A super mode owns the Use button (charge/throw/punch): tools don't fire, but you can still move and look.</summary>
+        public static bool BlocksTools;
 
-        public static bool Busy => RaptorView.Active != null || HeliView.Active != null;
+        public static bool Busy => RaptorView.Active != null || HeliView.Active != null || SuperMode.Active != null;
 
-        public static void Clear() { TakesOverInput = WantsCursor = HideTouchControls = false; }
+        public static void Clear() { TakesOverInput = WantsCursor = HideTouchControls = BlocksTools = false; }
     }
 }

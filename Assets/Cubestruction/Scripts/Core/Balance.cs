@@ -108,6 +108,7 @@ namespace Cubestruction
         [NonSerialized] public ToolCategory cat;
         public bool IsExplosive => (cat == ToolCategory.Throwable || cat == ToolCategory.Placed || id == "RocketLauncher") && id != "BoingPad";
         public bool IsContinuous => cooldown <= 0.12f;
+        public ToolDef Clone() => (ToolDef)MemberwiseClone();
         public bool IsProjectile => cat == ToolCategory.Gun && speed > 0;
     }
 

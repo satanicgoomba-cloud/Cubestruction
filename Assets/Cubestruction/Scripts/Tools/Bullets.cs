@@ -361,6 +361,7 @@ namespace Cubestruction.Tools
                     return new Color(1f, 0.95f, 0.6f, 1f);
                 case "DrillTorpedo": return new Color(1f, 0.62f, 0.2f, 1f);
                 case "GooGun": return new Color(1f, 0.42f, 0.78f, 0.95f);
+                case "SunOrbBlast": return new Color(1f, 0.82f, 0.3f, 0.9f);
                 case "WarpKunai": return new Color(0.55f, 0.35f, 1f, 1f);
                 case "SawYoyo": return new Color(0.9f, 0.95f, 1f, 1f);
                 case "MagnetBoulder": return new Color(0.55f, 0.6f, 0.75f, 1f);

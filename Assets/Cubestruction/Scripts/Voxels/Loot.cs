@@ -5,7 +5,7 @@ namespace Cubestruction.Voxels
 {
     /// <summary>
     /// Loot hidden in the Mining cube: glowing gold voxels that pay out to whoever breaks them.
-    /// Deeper layers roll better prizes; killstreaks only show up from crystal down.
+    /// Deeper layers roll better prizes; killstreaks and supers only show up from crystal down.
     /// </summary>
     public static class Loot
     {
@@ -20,9 +20,11 @@ namespace Cubestruction.Voxels
         {
             new[] { Cash(150, 4), Item("Grenade", 5, 2), Item("BoingPad", 3, 2) },
             new[] { Cash(500, 3), Item("StickyBomb", 5, 2), Item("Dynamite", 4, 2), Item("BoingPad", 3, 1) },
-            new[] { Cash(1500, 3), Item("TNT", 3, 2), Item("RaptorLaptop", 1, 2) },
-            new[] { Cash(4000, 2), Item("C4", 3, 2), Item("RaptorLaptop", 1, 3), Item("HeliGunner", 1, 1.5f) },
-            new[] { Item("RaptorLaptop", 1, 3), Item("HeliGunner", 1, 3.5f), Item("NukeCrate", 1, 1.5f) },
+            new[] { Cash(1500, 3), Item("TNT", 3, 2), Item("RaptorLaptop", 1, 2), Item("MeteorDive", 1, 1.5f) },
+            new[] { Cash(4000, 2), Item("C4", 3, 2), Item("RaptorLaptop", 1, 3), Item("HeliGunner", 1, 1.5f),
+                    Item("AquaSurge", 1, 1.5f), Item("EchoClones", 1, 1.5f), Item("MeteorDive", 1, 1f) },
+            new[] { Item("RaptorLaptop", 1, 2), Item("HeliGunner", 1, 2.5f), Item("NukeCrate", 1, 1f),
+                    Item("SunOrb", 1, 2f), Item("TitanBuddy", 1, 2f), Item("AquaSurge", 1, 1.5f), Item("EchoClones", 1, 1.5f) },
         };
 
         /// <summary>How many loot voxels each layer gets (38 in the 68^3 cube; scales with volume).</summary>

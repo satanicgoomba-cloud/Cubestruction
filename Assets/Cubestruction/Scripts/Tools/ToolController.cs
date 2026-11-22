@@ -26,6 +26,17 @@ namespace Cubestruction.Tools
         // rope swing, synced so everyone sees your web-line
         public readonly NetworkVariable<bool> ropeOn = new NetworkVariable<bool>(false, writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<Vector3> ropeAnchor = new NetworkVariable<Vector3>(default, writePerm: NetworkVariableWritePermission.Owner);
+        // super modes (server-written, everyone renders): Echo Clones on, Sun Orb charge 0..1
+        public readonly NetworkVariable<bool> clonesOn = new NetworkVariable<bool>(false);
+        public readonly NetworkVariable<float> sunOrbSize = new NetworkVariable<float>(0f);
+
+        /// <summary>Where the three Echo Clones stand, relative to you (right, up, forward).</summary>
+        public static readonly Vector3[] CloneOffsets = { new Vector3(-1.6f, 0, -0.5f), new Vector3(1.6f, 0, -0.5f), new Vector3(0, 0.4f, -1.6f) };
+        public IEnumerable<Vector3> CloneOffsetsWorld() { foreach (var o in CloneOffsets) yield return transform.rotation * (o * _motor.WorldScale); }
+
+        // server: the personal super mode in progress
+        string _superKind; float _superUntil, _superTickAt, _sunStart, _clonesUntil; int _sunVox0;
+        GameObject _orbVis;
 
         /// <summary>Swing input, written every frame by the rig (FlatRig / VRRig / mobile) on the owner.</summary>
         [System.NonSerialized] public bool swingHeld;
@@ -66,6 +77,8 @@ namespace Cubestruction.Tools
         {
             leftTool.OnValueChanged += (_, __) => RefreshVisuals();
             rightTool.OnValueChanged += (_, __) => RefreshVisuals();
+            clonesOn.OnValueChanged += (_, on) => CloneEcho.Sync(this, on);
+            CloneEcho.Sync(this, clonesOn.Value);
             if (IsOwner)
             {
                 rightTool.Value = Balance.Tool("Pickaxe").index;
@@ -127,6 +140,7 @@ namespace Cubestruction.Tools
 
         void Update()
         {
+            if (IsSpawned && IsServer) ServerSuperTick();
             if (!IsSpawned || !IsOwner) return;
             if (_avatar.role.Value != PlayerRole.Miner || MatchManager.Instance == null ||
                 MatchManager.Instance.state.Value != MatchState.Playing || _motor.Frozen)
@@ -177,10 +191,25 @@ namespace Cubestruction.Tools
             if (_motor.IsGrappling && (ropeAnchor.Value - _motor.RopeAnchor).sqrMagnitude > 1e-4f) ropeAnchor.Value = _motor.RopeAnchor;
         }
 
-        /// <summary>Everyone draws every rope (owner from its live state, others from the synced anchor).</summary>
+        /// <summary>Everyone draws every rope (owner from its live state, others from the synced anchor),
+        /// and every charging Sun Orb.</summary>
         void LateUpdate()
         {
             if (!IsSpawned) return;
+            float orb = sunOrbSize.Value;
+            if (orb > 0)
+            {
+                if (!_orbVis)
+                {
+                    _orbVis = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    Destroy(_orbVis.GetComponent<Collider>());
+                    _orbVis.GetComponent<MeshRenderer>().material = new Material(FxHub.Instance.glowMaterial) { color = new Color(1f, 0.85f, 0.3f, 0.85f) };
+                }
+                float s = _motor.WorldScale;
+                _orbVis.transform.position = transform.position + Vector3.up * (2.2f + orb * 1.5f) * s;
+                _orbVis.transform.localScale = Vector3.one * (0.4f + 1.6f * orb) * 2f * s * (1f + 0.04f * Mathf.Sin(Time.time * 12f));
+            }
+            else if (_orbVis) Destroy(_orbVis);
             bool on = IsOwner ? _motor.IsGrappling : ropeOn.Value;
             if (!on) { if (_rope) _rope.enabled = false; return; }
             if (!_rope)
@@ -457,6 +486,7 @@ namespace Cubestruction.Tools
             var t = Balance.Tool(tool);
             if (!ServerCheck(t, point, 1.6f) || t.cat != ToolCategory.Melee) return;
             VoxelCube.Instance?.ServerDamage(point, t.radiusCells, t.damage, t.tier, false, OwnerClientId);
+            if (clonesOn.Value) foreach (var off in CloneOffsetsWorld()) VoxelCube.Instance?.ServerDamage(point + off, t.radiusCells, t.damage, t.tier, false, OwnerClientId);
             if (t.id == "SonicHammer") FxHub.Instance.ShockwaveRpc(point, t.radiusCells * VoxelCube.Instance.cellSize);
             FxHub.Instance.ImpactRpc(point, tool);
         }
@@ -466,6 +496,13 @@ namespace Cubestruction.Tools
         {
             var t = Balance.Tool(tool);
             if (!ServerCheck(t, origin, 0) || (t.cat != ToolCategory.Beam && t.cat != ToolCategory.Gun)) return;
+            ServerRay(t, origin, dir, seed);
+            if (clonesOn.Value) { int k = 1; foreach (var off in CloneOffsetsWorld()) ServerRay(t, origin + off, dir, seed + k++); }
+        }
+
+        void ServerRay(ToolDef t, Vector3 origin, Vector3 dir, int seed)
+        {
+            int tool = t.index;
             var cube = VoxelCube.Instance; if (!cube) return;
             float reachM = t.rangeM * _motor.WorldScale;
             if (t.freezes) { cube.ServerFreezeRay(new Ray(origin, dir), reachM, t.radiusCells, t.tier); return; }
@@ -499,6 +536,17 @@ namespace Cubestruction.Tools
             // volley was already simulated with authority when it fired)
             if (!IsOwner) fx.FireBullets(t, muzzle, dir, seed, OwnerClientId, true, scale);
             fx.BulletsRpc(tool, muzzle, dir, seed, OwnerClientId, scale);
+            if (clonesOn.Value)
+            {
+                // Echo Clones fire the same volley from their spots (everyone sees these, the shooter too)
+                int k = 1;
+                foreach (var off in CloneOffsetsWorld())
+                {
+                    fx.FireBullets(t, muzzle + off, dir, seed + k, OwnerClientId, true, scale);
+                    fx.BulletsRpc(tool, muzzle + off, dir, seed + k, OwnerClientId, scale, true);
+                    k++;
+                }
+            }
         }
 
         // ------------------------------------------------------------------ Chain Whip / Magnet Glove (owner)
@@ -617,6 +665,9 @@ namespace Cubestruction.Tools
             if (t == null || t.cat != ToolCategory.Streak || _avatar.role.Value != PlayerRole.Miner) return;
             if (MatchManager.Instance.state.Value != MatchState.Playing) return;
             if (t.id == "HeliGunner" && HeliGunship.Instance != null) { DenyRpc("A chopper is already in the air. Try again when it leaves."); return; }
+            bool personal = t.id == "AquaSurge" || t.id == "MeteorDive" || t.id == "SunOrb" || t.id == "TitanBuddy";
+            if (personal && SuperActive) { DenyRpc("Finish your current super first."); return; }
+            if (t.id == "EchoClones" && clonesOn.Value) { DenyRpc("Your clones are already out."); return; }
             if (!_avatar.ServerConsumeCharge(tool)) return;
             switch (t.id)
             {
@@ -625,11 +676,127 @@ namespace Cubestruction.Tools
                     _raptorUntil = Time.time + t.fuse + 3f;
                     BeginRaptorRpc(_raptorLeft, t.fuse);
                     break;
+                case "AquaSurge": StartSuper(t.id, 25f); break;
+                case "MeteorDive": StartSuper(t.id, 15f); break;
+                case "TitanBuddy": StartSuper(t.id, 31f); break;
+                case "SunOrb":
+                    StartSuper(t.id, 20f);
+                    _sunStart = Time.time; _sunVox0 = VoxelCube.TotalDestroyed; sunOrbSize.Value = 0.05f;
+                    break;
+                case "EchoClones":
+                    clonesOn.Value = true; _clonesUntil = Time.time + 20f;
+                    break;
                 case "HeliGunner":
                     var go = Instantiate(heliPrefab);
                     go.GetComponent<HeliGunship>().ServerInit(OwnerClientId, t.fuse);
                     go.GetComponent<NetworkObject>().Spawn(true);
                     break;
+            }
+        }
+
+        // ------------------------------------------------------------------ super modes (server)
+
+        bool SuperActive => _superKind != null && Time.time < _superUntil;
+        bool Super(string kind) => _superKind == kind && Time.time < _superUntil;
+
+        void StartSuper(string kind, float seconds)
+        {
+            _superKind = kind; _superUntil = Time.time + seconds;
+            BeginSuperRpc(kind);
+        }
+
+        void ServerSuperTick()
+        {
+            if (clonesOn.Value && Time.time > _clonesUntil) clonesOn.Value = false;
+            if (_superKind == "SunOrb" && Time.time < _superUntil && Time.time >= _superTickAt)
+            {
+                // grows with time and with every voxel anyone breaks while it charges (teamwork!)
+                _superTickAt = Time.time + 0.2f;
+                float time01 = Mathf.Clamp01((Time.time - _sunStart) / 8f);
+                float team01 = Mathf.Clamp01((VoxelCube.TotalDestroyed - _sunVox0) / 1500f);
+                sunOrbSize.Value = Mathf.Clamp01(0.05f + time01 * 0.6f + team01 * 0.4f);
+            }
+            if (_superKind != null && Time.time >= _superUntil) { _superKind = null; sunOrbSize.Value = 0; }
+        }
+
+        bool NearMe(Vector3 p, float m) => Vector3.Distance(p, _avatar.headAnchor.position) <= m * Mathf.Max(1f, _motor.WorldScale);
+
+        [Rpc(SendTo.Owner)]
+        void BeginSuperRpc(string kind) => SuperMode.Begin(this, kind);
+
+        /// <summary>Aqua Surge: one tick of the beam (owner sends ~10/s while firing).</summary>
+        [Rpc(SendTo.Server)]
+        public void SurgeTickRpc(Vector3 origin, Vector3 dir, float charge)
+        {
+            if (!Super("AquaSurge") || Time.time < _superTickAt || float.IsNaN(dir.x) || !NearMe(origin, 3f)) return;
+            _superTickAt = Time.time + 0.08f;
+            charge = Mathf.Clamp01(charge);
+            float radiusCells = 1.5f + 2.5f * charge;
+            var cube = VoxelCube.Instance;
+            cube?.ServerCarveBeam(origin, dir.normalized, 30f, radiusCells, 250f, 5, OwnerClientId);
+            FxHub.Instance?.SurgeBeamRpc(origin, dir.normalized, radiusCells * (cube ? cube.cellSize : 0.25f));
+        }
+
+        [Rpc(SendTo.Server)]
+        public void SuperEndRpc() { _superKind = null; sunOrbSize.Value = 0; }
+
+        /// <summary>Meteor Dive: the owner hit the ground; crater + shockwave (you're immune to your own).</summary>
+        [Rpc(SendTo.Server)]
+        public void MeteorImpactRpc(Vector3 pos)
+        {
+            if (!Super("MeteorDive") || !NearMe(pos, 6f)) return;
+            _superKind = null;
+            var cube = VoxelCube.Instance;
+            cube?.ServerDamage(pos, 7f, 500f, 5, true, OwnerClientId);
+            ServerBlastOthers(pos, 9f, 14f);
+            FxHub.Instance?.ExplosionRpc(pos, 7f * (cube ? cube.cellSize : 0.25f), Balance.Tool("RocketLauncher").index, false);
+            FxHub.Instance?.ShockwaveRpc(pos, 4f);
+        }
+
+        /// <summary>Sun Orb: throw the charged orb; its size sets the blast.</summary>
+        [Rpc(SendTo.Server)]
+        public void SunOrbThrowRpc(Vector3 origin, Vector3 dir)
+        {
+            if (!Super("SunOrb") || float.IsNaN(dir.x) || !NearMe(origin, 6f)) return;
+            float size = Mathf.Max(0.05f, sunOrbSize.Value);
+            _superKind = null; sunOrbSize.Value = 0;
+            var orb = Balance.Tool("SunOrbBlast").Clone();
+            orb.radiusCells = 4f + 9f * size;   // full charge: a 13-voxel-radius crater
+            float vis = 0.4f + 1.6f * size;
+            var fx = FxHub.Instance; if (!fx) return;
+            fx.FireBullets(orb, origin, dir.normalized, 1, OwnerClientId, true, 1f, vis);
+            fx.BulletsRpc(orb.index, origin, dir.normalized, 1, OwnerClientId, 1f, true, vis);
+        }
+
+        /// <summary>Titan Buddy: a giant punch.</summary>
+        [Rpc(SendTo.Server)]
+        public void TitanPunchRpc(Vector3 point)
+        {
+            if (!Super("TitanBuddy") || Time.time < _superTickAt || !NearMe(point, 2.2f)) return;
+            _superTickAt = Time.time + 0.22f;
+            VoxelCube.Instance?.ServerDamage(point, 3.5f, 400f, 5, false, OwnerClientId);
+            FxHub.Instance?.ShockwaveRpc(point, 1.6f);
+            FxHub.Instance?.ImpactRpc(point, -1);
+        }
+
+        /// <summary>Titan Buddy: landing from a jump cracks the ground around you.</summary>
+        [Rpc(SendTo.Server)]
+        public void TitanStompRpc(Vector3 feet)
+        {
+            if (!Super("TitanBuddy") || !NearMe(feet, 2f)) return;
+            VoxelCube.Instance?.ServerDamage(feet, 4.5f, 300f, 5, true, OwnerClientId);
+            ServerBlastOthers(feet, 8f, 10f);
+            FxHub.Instance?.ShockwaveRpc(feet, 3f);
+        }
+
+        void ServerBlastOthers(Vector3 pos, float radius, float knock)
+        {
+            foreach (var pl in PlayerAvatar.All)
+            {
+                if (pl == _avatar || pl.role.Value == PlayerRole.God) continue;
+                var d = pl.transform.position + Vector3.up * 0.5f - pos;
+                if (d.magnitude > radius) continue;
+                pl.KnockbackRpc((d.normalized + Vector3.up * 0.6f).normalized * knock * (1f - d.magnitude / radius));
             }
         }
 
@@ -681,6 +848,12 @@ namespace Cubestruction.Tools
             var t = Balance.Tool(tool);
             if (!ServerCheck(t, pos, 4f)) return;
             if (t.consumable && !_avatar.ServerConsumeCharge(tool)) return;
+            SpawnExplosive(t, pos, vel);
+            if (clonesOn.Value && t.cat == ToolCategory.Throwable) foreach (var off in CloneOffsetsWorld()) SpawnExplosive(t, pos + off, vel);
+        }
+
+        void SpawnExplosive(ToolDef t, Vector3 pos, Vector3 vel)
+        {
             var go = Instantiate(explosivePrefab, pos, Quaternion.LookRotation(vel.sqrMagnitude > 0.01f ? vel : transform.forward));
             var ex = go.GetComponent<ExplosiveProjectile>();
             ex.ServerInit(t, OwnerClientId, vel);

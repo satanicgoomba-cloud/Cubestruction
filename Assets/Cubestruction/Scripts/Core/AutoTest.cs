@@ -445,6 +445,102 @@ namespace Cubestruction
                 }
             }
 
+            // ---- super modes, around the -X face
+            System.Collections.IEnumerator UseStreak(string id)
+            {
+                var st = Balance.Tool(id);
+                me.charges[st.index] = 1;
+                yield return null;
+                me.Tools.SelectTool(st.index);
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false;
+                yield return new WaitForSeconds(0.5f);
+            }
+            var xFace2 = cube.Center + Vector3.left * cube.HalfExtent;
+            var standX = new Vector3(xFace2.x - 4f, cube.transform.position.y + 0.2f, xFace2.z);
+            {
+                me.Motor.Teleport(standX, 90f);
+                yield return UseStreak("AquaSurge");
+                var sm = Tools.SuperMode.Active;
+                Check(sm != null && sm.Kind == "AquaSurge", "Aqua Surge starts charging");
+                if (sm != null)
+                {
+                    int v0 = cube.alive.Value;
+                    sm.autoAim = cube.Center; sm.autoUse = true;
+                    yield return new WaitForSeconds(1.6f);
+                    sm.autoUse = false;
+                    yield return new WaitForSeconds(3.2f);
+                    Check(v0 - cube.alive.Value > 300 && Tools.SuperMode.Active == null, $"Aqua Surge tunnels through the cube ({v0 - cube.alive.Value} voxels)");
+                }
+            }
+            {
+                me.Motor.Teleport(standX + Vector3.left * 2f, 90f);
+                yield return new WaitForSeconds(0.5f);
+                float y0 = me.transform.position.y;
+                yield return UseStreak("MeteorDive");
+                var sm = Tools.SuperMode.Active;
+                Check(sm != null && sm.Kind == "MeteorDive", "Meteor Dive launches");
+                if (sm != null)
+                {
+                    int v0 = cube.alive.Value;
+                    sm.autoAim = cube.Center + Vector3.up * cube.HalfExtent;
+                    yield return new WaitForSeconds(1.2f);
+                    float up = me.transform.position.y - y0;
+                    Check(up > 15f, $"Meteor Dive blasts you into the sky ({up:0} m)");
+                    yield return new WaitForSeconds(4.5f);
+                    Check(v0 - cube.alive.Value > 100 && Tools.SuperMode.Active == null, $"the dive leaves a crater ({v0 - cube.alive.Value} voxels)");
+                    yield return new WaitForSeconds(1f);
+                }
+            }
+            {
+                me.Motor.Teleport(standX, 90f);
+                yield return UseStreak("SunOrb");
+                var sm = Tools.SuperMode.Active;
+                Check(sm != null && sm.Kind == "SunOrb", "Sun Orb starts gathering");
+                if (sm != null)
+                {
+                    int v0 = cube.alive.Value;
+                    sm.sunChargeS = 2.5f; sm.autoAim = xFace2 + Vector3.forward * 5f + Vector3.up * 3f;   // not down the Surge tunnel
+                    yield return new WaitForSeconds(1.2f);
+                    Check(me.Tools.sunOrbSize.Value > 0.05f, $"the Sun Orb grows over your head ({me.Tools.sunOrbSize.Value:0.00})");
+                    yield return new WaitForSeconds(4f);
+                    Check(v0 - cube.alive.Value > 150, $"a thrown Sun Orb leaves a crater ({v0 - cube.alive.Value} voxels from a short 2.5 s charge)");
+                }
+            }
+            {
+                me.Motor.Teleport(standX, 90f);
+                yield return UseStreak("TitanBuddy");
+                var sm = Tools.SuperMode.Active;
+                yield return new WaitForSeconds(0.8f);
+                Check(sm != null && me.Motor.WorldScale > 4.5f, $"Titan Buddy makes you giant ({me.Motor.WorldScale:0.0}x)");
+                if (sm != null)
+                {
+                    int v0 = cube.alive.Value;
+                    sm.autoAim = xFace2 + Vector3.up * 3f; sm.autoUse = true;
+                    yield return new WaitForSeconds(2f);
+                    sm.autoUse = false;
+                    yield return new WaitForSeconds(0.5f);
+                    Check(v0 - cube.alive.Value > 150, $"titan punches crater the cube ({v0 - cube.alive.Value} voxels)");
+                    me.Tools.SuperEndRpc(); sm.End();
+                    yield return null;
+                    Check(Mathf.Abs(me.Motor.WorldScale - 1f) < 0.01f && Tools.SuperMode.Active == null, "you shrink back when it ends");
+                    yield return new WaitForSeconds(1.5f);
+                }
+            }
+            {
+                yield return UseStreak("EchoClones");
+                int ghosts = 0;
+                foreach (var tr in FindObjectsByType<Transform>()) if (tr.name.StartsWith("EchoClone")) ghosts++;
+                Check(me.Tools.clonesOn.Value && ghosts == 3, $"Echo Clones appear ({ghosts} clones)");
+                int f0 = Tools.Bullets.Fired;
+                yield return FireAt("Minigun", 1f, false, -12f);
+                int fired = Tools.Bullets.Fired - f0;
+                Check(fired > 60, $"the clones copy your shots ({fired} bubbles from a 1 s burst)");
+                me.Tools.clonesOn.Value = false;
+                yield return null;
+            }
+
             // ---- God Siege, solo: the one player becomes the God
             var mm = MatchManager.Instance;
             var sd = Siege.SiegeDirector.Instance;

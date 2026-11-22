@@ -30,6 +30,8 @@ namespace Cubestruction.Player
         public float stickSensitivity = 160f;
         public Camera Cam { get; private set; }
         public bool CursorFree { get; set; }
+        /// <summary>Use (LMB / RT / mobile Use) this frame, for super modes that own the button.</summary>
+        public bool UseHeld { get; private set; }
 
         PlayerAvatar _avatar;
         PlayerMotor _motor;
@@ -152,8 +154,9 @@ namespace Cubestruction.Player
             _avatar.Tools.swingHand = _avatar.rightHand;
             _motor.reelIn = _motor.IsGrappling && (_jump.IsPressed() || MobileInput.JumpHeld);
 
-            // ---- tools
-            _avatar.Tools.SetTriggers(false, _use.IsPressed() || MobileInput.UseHeld);
+            // ---- tools (a super mode may own the Use button)
+            UseHeld = _use.IsPressed() || MobileInput.UseHeld;
+            _avatar.Tools.SetTriggers(false, UseHeld && !Tools.StreakState.BlocksTools);
             float sc = _scroll.ReadValue<float>();
             if (sc > 0.1f || _next.WasPressedThisFrame()) _avatar.Tools.CycleHand(false, +1);
             if (sc < -0.1f || _prev.WasPressedThisFrame()) _avatar.Tools.CycleHand(false, -1);

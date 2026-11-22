@@ -29,6 +29,9 @@ namespace Cubestruction.Player
         public const float MaxJetFuel = 6f;
         public float WorldScale { get => transform.localScale.x; set => transform.localScale = Vector3.one * value; }
         public bool Frozen;    // ragdoll / menus
+        /// <summary>A super mode (Meteor Dive) drives the body directly: gravity and input are ignored.</summary>
+        [System.NonSerialized] public Vector3? forcedVelocity;
+        public CollisionFlags LastFlags { get; private set; }
 
         // intent set by rigs every frame
         [HideInInspector] public Vector3 moveIntent;      // world-space, horizontal, magnitude 0..1
@@ -123,6 +126,14 @@ namespace Cubestruction.Player
             if (Frozen || !Controller.enabled) return;
             float dt = Time.deltaTime;
             float scale = WorldScale;
+            if (forcedVelocity.HasValue)
+            {
+                Velocity = forcedVelocity.Value;
+                LastFlags = Controller.Move(Velocity * dt);
+                Grounded = (LastFlags & CollisionFlags.Below) != 0;
+                FallCheck();
+                return;
+            }
 
             // ---- climbing: hands (VR) or spider-climb (flat) move us directly, gravity off
             bool canClimb = Stamina > 0f;
@@ -160,6 +171,7 @@ namespace Cubestruction.Player
             else Velocity.y += gravity * scale * dt;
 
             var flags = Controller.Move(Velocity * dt);
+            LastFlags = flags;
             Grounded = (flags & CollisionFlags.Below) != 0;
             if (Grounded)
             {
