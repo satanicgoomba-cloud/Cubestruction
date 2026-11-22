@@ -879,6 +879,13 @@ namespace Cubestruction.UI
             if (_lobbyRefresh > 0) return;
             _lobbyRefresh = 1f;
             _endTitle.text = mm.resultText.Value.ToString();
+            var tdEnd = Siege.TitanDirector.Instance;
+            if (mm.mode.Value == GameMode.TitanSiege && tdEnd != null && tdEnd.scoreboard.Value.Length > 0)
+            {
+                _endStats.supportRichText = true;
+                _endStats.text = tdEnd.scoreboard.Value.ToString();
+                return;
+            }
             var sb = new System.Text.StringBuilder();
             int rank = 1;
             foreach (var p in PlayerAvatar.All.OrderByDescending(p => p.voxels.Value).ThenByDescending(p => p.earned.Value))
@@ -904,10 +911,13 @@ namespace Cubestruction.UI
                 // defenders: the Titan's health instead of voxels, plus what the turret you're at is doing
                 float max = Mathf.Max(1f, td.titanMaxHp.Value);
                 AeroTheme.SetBar(_voxelBar, td.titanHp.Value / max);
-                string phase = td.prep.Value ? $"Load the turrets! Titan in {Mathf.CeilToInt(td.prepLeft.Value)}s" : $"Wall {td.wall.Value + 1} of 3";
+                string phase = td.prep.Value ? $"Dig ammo and load the turrets! {Mathf.CeilToInt(td.prepLeft.Value)}s" :
+                               !td.transformed.Value ? "The Titan is about to transform..." :
+                               $"Wall {td.wall.Value + 1} of 3" + (td.rage.Value == 2 ? "  ·  BERSERK" : td.rage.Value == 1 ? "  ·  ENRAGED" : "");
                 string turret = Siege.DefenderController.TurretHint();
+                string carry = $"Carrying: {me.ammoBalls.Value} cannonballs · {me.ammoRockets.Value} rockets";
                 _voxelText.verticalOverflow = VerticalWrapMode.Overflow;
-                _voxelText.text = $"Titan {td.titanHp.Value:0} HP  ·  {phase}" + (turret != null ? $"\n{turret}" : "");
+                _voxelText.text = $"Titan {td.titanHp.Value:0} HP  ·  {phase}\n{carry}" + (turret != null ? $"\n{turret}" : "");
                 _lastAlive = -1;
                 RefreshHotbar(me);
                 return;

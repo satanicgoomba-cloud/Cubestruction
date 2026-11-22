@@ -12,7 +12,10 @@ namespace Cubestruction.Voxels
     /// </summary>
     public class VoxelGrid
     {
+        /// <summary>Size along X (and the cube's size for full cubes). Long maps use NX × NY × NZ.</summary>
         public readonly int N;
+        public readonly int NX, NY, NZ;
+        public int Count => NX * NY * NZ;
         public readonly byte[] layer;   // layer index per cell
         public readonly float[] hp;     // remaining hit points (server authoritative)
         public readonly bool[] solid;
@@ -27,11 +30,11 @@ namespace Cubestruction.Voxels
 
         /// <param name="shape">Optional map: returns the layer index of cell (x, y, z), or -1 for empty.
         /// Without it the grid is a full cube layered by depth (Mining / God Siege).</param>
-        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null)
+        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null, int ny = -1, int nz = -1)
         {
-            N = n;
+            N = NX = n; NY = ny > 0 ? ny : n; NZ = nz > 0 ? nz : n;
             this.hpScale = hpScale;
-            int count = n * n * n;
+            int count = NX * NY * NZ;
             layer = new byte[count];
             hp = new float[count];
             solid = new bool[count];
@@ -39,9 +42,9 @@ namespace Cubestruction.Voxels
             CoreLayer = L.Length - 1;
             float half = n / 2f;
             int alive = 0, top = 0;
-            for (int x = 0; x < n; x++)
-            for (int y = 0; y < n; y++)
-            for (int z = 0; z < n; z++)
+            for (int x = 0; x < NX; x++)
+            for (int y = 0; y < NY; y++)
+            for (int z = 0; z < NZ; z++)
             {
                 int li;
                 if (shape != null)
@@ -72,9 +75,9 @@ namespace Cubestruction.Voxels
 
         int D(int i) => Mathf.Min(i, N - 1 - i);
 
-        public int Index(int x, int y, int z) => (x * N + y) * N + z;
-        public Vector3Int Coord(int idx) { int z = idx % N; int y = (idx / N) % N; int x = idx / (N * N); return new Vector3Int(x, y, z); }
-        public bool InBounds(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < N && y < N && z < N;
+        public int Index(int x, int y, int z) => (x * NY + y) * NZ + z;
+        public Vector3Int Coord(int idx) { int z = idx % NZ; int y = (idx / NZ) % NY; int x = idx / (NY * NZ); return new Vector3Int(x, y, z); }
+        public bool InBounds(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < NX && y < NY && z < NZ;
         public bool IsSolid(int x, int y, int z) => InBounds(x, y, z) && solid[Index(x, y, z)];
         public bool IsSolid(Vector3Int c) => IsSolid(c.x, c.y, c.z);
         public LayerDef LayerOf(int idx) => Balance.Layers.layers[layer[idx]];
@@ -102,9 +105,9 @@ namespace Cubestruction.Voxels
                                 List<int> killed, Func<int, bool> protectedCell = null)
         {
             float r = Mathf.Max(radius, 0.5f);
-            int x0 = Mathf.Max(0, Mathf.FloorToInt(centre.x - r)), x1 = Mathf.Min(N - 1, Mathf.CeilToInt(centre.x + r));
-            int y0 = Mathf.Max(0, Mathf.FloorToInt(centre.y - r)), y1 = Mathf.Min(N - 1, Mathf.CeilToInt(centre.y + r));
-            int z0 = Mathf.Max(0, Mathf.FloorToInt(centre.z - r)), z1 = Mathf.Min(N - 1, Mathf.CeilToInt(centre.z + r));
+            int x0 = Mathf.Max(0, Mathf.FloorToInt(centre.x - r)), x1 = Mathf.Min(NX - 1, Mathf.CeilToInt(centre.x + r));
+            int y0 = Mathf.Max(0, Mathf.FloorToInt(centre.y - r)), y1 = Mathf.Min(NY - 1, Mathf.CeilToInt(centre.y + r));
+            int z0 = Mathf.Max(0, Mathf.FloorToInt(centre.z - r)), z1 = Mathf.Min(NZ - 1, Mathf.CeilToInt(centre.z + r));
             var L = Balance.Layers.layers;
             int startCount = killed.Count;
             for (int x = x0; x <= x1; x++)
@@ -129,9 +132,9 @@ namespace Cubestruction.Voxels
         /// <summary>"Sand" rule: any voxel left with <= 1 solid face-neighbour crumbles away.</summary>
         public void Crumble(Vector3Int min, Vector3Int max, List<int> killed)
         {
-            for (int x = Mathf.Max(0, min.x); x <= Mathf.Min(N - 1, max.x); x++)
-            for (int y = Mathf.Max(0, min.y); y <= Mathf.Min(N - 1, max.y); y++)
-            for (int z = Mathf.Max(0, min.z); z <= Mathf.Min(N - 1, max.z); z++)
+            for (int x = Mathf.Max(0, min.x); x <= Mathf.Min(NX - 1, max.x); x++)
+            for (int y = Mathf.Max(0, min.y); y <= Mathf.Min(NY - 1, max.y); y++)
+            for (int z = Mathf.Max(0, min.z); z <= Mathf.Min(NZ - 1, max.z); z++)
             {
                 int idx = Index(x, y, z);
                 if (!solid[idx]) continue;
@@ -148,24 +151,24 @@ namespace Cubestruction.Voxels
         /// is a floating island and collapses into sand. O(N^3) — call debounced, server only.</summary>
         public void CollapseFloatingIslands(List<int> killed)
         {
-            int count = N * N * N;
+            int count = Count;
             if (_visited == null) _visited = new bool[count];
             Array.Clear(_visited, 0, count);
             _bfs.Clear();
-            for (int x = 0; x < N; x++)
-            for (int z = 0; z < N; z++)
+            for (int x = 0; x < NX; x++)
+            for (int z = 0; z < NZ; z++)
             {
                 int idx = Index(x, 0, z);
                 if (solid[idx]) { _visited[idx] = true; _bfs.Enqueue(idx); }
             }
-            int nn = N * N;
+            int nn = NY * NZ;
             while (_bfs.Count > 0)
             {
                 int idx = _bfs.Dequeue();
-                int z = idx % N, y = (idx / N) % N, x = idx / nn;
-                if (x > 0) Visit(idx - nn); if (x < N - 1) Visit(idx + nn);
-                if (y > 0) Visit(idx - N);  if (y < N - 1) Visit(idx + N);
-                if (z > 0) Visit(idx - 1);  if (z < N - 1) Visit(idx + 1);
+                int z = idx % NZ, y = (idx / NZ) % NY, x = idx / nn;
+                if (x > 0) Visit(idx - nn); if (x < NX - 1) Visit(idx + nn);
+                if (y > 0) Visit(idx - NZ);  if (y < NY - 1) Visit(idx + NZ);
+                if (z > 0) Visit(idx - 1);  if (z < NZ - 1) Visit(idx + 1);
             }
             for (int i = 0; i < count; i++)
                 if (solid[i] && !_visited[i]) Kill(i, killed);
@@ -186,12 +189,12 @@ namespace Cubestruction.Voxels
         /// </summary>
         public void CollapseIslandsNear(List<int> removed, List<int> killed)
         {
-            int count = N * N * N, nn = N * N;
+            int count = Count, nn = NY * NZ;
             if (_stamp == null) _stamp = new int[count];
             if (++_gen == int.MaxValue) { Array.Clear(_stamp, 0, count); _gen = 1; }
             foreach (int r in removed)
             {
-                int rz = r % N, ry = (r / N) % N, rx = r / nn;
+                int rz = r % NZ, ry = (r / NZ) % NY, rx = r / nn;
                 for (int k = 0; k < 6; k++)
                 {
                     int x = rx, y = ry, z = rz;
@@ -208,7 +211,7 @@ namespace Cubestruction.Voxels
         /// Leaves the visited cells in _region and stamps them grounded on success.</summary>
         bool ReachesFloor(int seed)
         {
-            int nn = N * N;
+            int nn = NY * NZ;
             _region.Clear(); _dfs.Clear();
             int visit = -_gen;   // temporary mark for this search
             _stamp[seed] = visit; _dfs.Push(seed); _region.Add(seed);
@@ -216,12 +219,12 @@ namespace Cubestruction.Voxels
             while (_dfs.Count > 0 && !grounded)
             {
                 int idx = _dfs.Pop();
-                int z = idx % N, y = (idx / N) % N, x = idx / nn;
+                int z = idx % NZ, y = (idx / NZ) % NY, x = idx / nn;
                 if (y == 0) { grounded = true; break; }
                 // push the downward step last so it is explored first
-                grounded |= Push(idx + 1, z < N - 1, visit); grounded |= Push(idx - 1, z > 0, visit);
-                grounded |= Push(idx + nn, x < N - 1, visit); grounded |= Push(idx - nn, x > 0, visit);
-                grounded |= Push(idx + N, y < N - 1, visit); grounded |= Push(idx - N, y > 0, visit);
+                grounded |= Push(idx + 1, z < NZ - 1, visit); grounded |= Push(idx - 1, z > 0, visit);
+                grounded |= Push(idx + nn, x < NX - 1, visit); grounded |= Push(idx - nn, x > 0, visit);
+                grounded |= Push(idx + NZ, y < NY - 1, visit); grounded |= Push(idx - NZ, y > 0, visit);
             }
             if (grounded) foreach (int i in _region) _stamp[i] = _gen;
             return grounded;
@@ -302,9 +305,9 @@ namespace Cubestruction.Voxels
             tEnter = 0; tExit = maxDist;
             for (int a = 0; a < 3; a++)
             {
-                float oa = o[a], da = d[a];
-                if (Mathf.Abs(da) < 1e-8f) { if (oa < 0 || oa > N) return false; continue; }
-                float t0 = (0 - oa) / da, t1 = (N - oa) / da;
+                float oa = o[a], da = d[a], size = a == 0 ? NX : a == 1 ? NY : NZ;
+                if (Mathf.Abs(da) < 1e-8f) { if (oa < 0 || oa > size) return false; continue; }
+                float t0 = (0 - oa) / da, t1 = (size - oa) / da;
                 if (t0 > t1) (t0, t1) = (t1, t0);
                 tEnter = Mathf.Max(tEnter, t0); tExit = Mathf.Min(tExit, t1);
                 if (tEnter > tExit) return false;

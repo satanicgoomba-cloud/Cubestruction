@@ -165,6 +165,12 @@ namespace Cubestruction.Tools
                 FxHub.Instance?.LocalBlast(b.pos, 0.3f * b.scale, BulletColor(t));
                 return false;
             }
+            // Titan Siege: guns found in the mine wall hurt the Titan (the server's copy decides)
+            if (b.authority && Siege.TitanDirector.ServerBulletHit(b.pos, t, b.owner, b.scale))
+            {
+                FxHub.Instance?.BulletImpact(b.pos, t, true);
+                return false;
+            }
             b.vel += Physics.gravity * t.gravity * b.scale * dt;
             var move = b.vel * dt;
             float dist = move.magnitude;
@@ -268,8 +274,8 @@ namespace Cubestruction.Tools
             bool outside = true;
             if (cube && cube.Grid != null)
             {
-                var c = cube.WorldToCell(b.pos); int n = cube.Grid.N;
-                outside = c.x < -3 || c.y < -3 || c.z < -3 || c.x > n + 2 || c.y > n + 2 || c.z > n + 2;
+                var c = cube.WorldToCell(b.pos); var g = cube.Grid;
+                outside = c.x < -3 || c.y < -3 || c.z < -3 || c.x > g.NX + 2 || c.y > g.NY + 2 || c.z > g.NZ + 2;
             }
             if (b.burrowLeft > 0 && !outside) return true;
             FxHub.Instance?.LocalBlast(b.pos, 0.8f * b.scale, BulletColor(b.def));

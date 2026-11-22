@@ -56,10 +56,9 @@ namespace Cubestruction.Voxels
             float s = _cube.cellSize;
             V.Clear(); Nrm.Clear(); Col.Clear(); Uv.Clear(); Uv2.Clear(); Tri.Clear();
             var layers = Balance.Layers.layers;
-            int n = g.N;
-            for (int x = _origin.x; x < Mathf.Min(_origin.x + VoxelCube.ChunkSize, n); x++)
-            for (int y = _origin.y; y < Mathf.Min(_origin.y + VoxelCube.ChunkSize, n); y++)
-            for (int z = _origin.z; z < Mathf.Min(_origin.z + VoxelCube.ChunkSize, n); z++)
+            for (int x = _origin.x; x < Mathf.Min(_origin.x + VoxelCube.ChunkSize, g.NX); x++)
+            for (int y = _origin.y; y < Mathf.Min(_origin.y + VoxelCube.ChunkSize, g.NY); y++)
+            for (int z = _origin.z; z < Mathf.Min(_origin.z + VoxelCube.ChunkSize, g.NZ); z++)
             {
                 int idx = g.Index(x, y, z);
                 if (!g.solid[idx]) continue;
@@ -77,7 +76,7 @@ namespace Cubestruction.Voxels
                 c.a = 1;
                 Color32 c32 = c;
                 // cube local space: origin at bottom centre
-                var centre = new Vector3((x - n * 0.5f + 0.5f) * s, (y + 0.5f) * s, (z - n * 0.5f + 0.5f) * s);
+                var centre = new Vector3((x - g.NX * 0.5f + 0.5f) * s, (y + 0.5f) * s, (z - g.NZ * 0.5f + 0.5f) * s);
                 for (int f = 0; f < 6; f++)
                 {
                     var d = Dirs[f];

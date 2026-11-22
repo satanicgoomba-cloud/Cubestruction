@@ -30,14 +30,21 @@ namespace Cubestruction.Voxels
         public readonly NetworkVariable<byte> shapeMode = new NetworkVariable<byte>(0);
 
         public VoxelGrid Grid { get; private set; }
-        public int Total => Grid == null ? 1 : Grid.N * Grid.N * Grid.N;
+        public int Total => Grid == null ? 1 : Grid.Count;
 
         /// <summary>Server: called with (killed cells, instigator client id, money awarded).</summary>
         public event Action<int, ulong, int> OnCellsDestroyedServer;
         /// <summary>Server hook used by God Siege shields: return true to protect a cell.</summary>
         public Func<int, bool> DamageFilter;
-        /// <summary>Server hook (Titan Siege): return false to ignore damage from this instigator.</summary>
-        public Func<ulong, bool> InstigatorFilter;
+        /// <summary>Server hook (Titan Siege): (cell, instigator) -> true protects that cell from that instigator.</summary>
+        public Func<int, ulong, bool> ProtectFilter;
+
+        Func<int, bool> Filter(ulong instigator)
+        {
+            if (ProtectFilter == null) return DamageFilter;
+            var df = DamageFilter; var pf = ProtectFilter;
+            return idx => (df != null && df(idx)) || pf(idx, instigator);
+        }
         /// <summary>All machines: fired when cells disappear (for VFX/audio).</summary>
         public event Action<List<int>> OnCellsRemoved;
 
@@ -103,14 +110,15 @@ namespace Cubestruction.Voxels
         {
             int n = size.Value;
             if (shapeMode.Value == 1) cellSize = Siege.TitanMap.CellSize;
-            Grid = new VoxelGrid(n, hpScale.Value, shapeMode.Value == 1 ? Siege.TitanMap.Shape(n) : null);
-            float extent = n * cellSize;
+            Grid = shapeMode.Value == 1
+                ? new VoxelGrid(Siege.TitanMap.SizeX, hpScale.Value, Siege.TitanMap.Shape(), Siege.TitanMap.SizeY, Siege.TitanMap.SizeZ)
+                : new VoxelGrid(n, hpScale.Value);
             // local origin = bottom centre
-            _chunkCount = Mathf.CeilToInt(n / (float)ChunkSize);
-            _chunks = new VoxelChunk[_chunkCount, _chunkCount, _chunkCount];
-            for (int x = 0; x < _chunkCount; x++)
-            for (int y = 0; y < _chunkCount; y++)
-            for (int z = 0; z < _chunkCount; z++)
+            int cx = Mathf.CeilToInt(Grid.NX / (float)ChunkSize), cy = Mathf.CeilToInt(Grid.NY / (float)ChunkSize), cz = Mathf.CeilToInt(Grid.NZ / (float)ChunkSize);
+            _chunks = new VoxelChunk[cx, cy, cz];
+            for (int x = 0; x < cx; x++)
+            for (int y = 0; y < cy; y++)
+            for (int z = 0; z < cz; z++)
             {
                 var go = new GameObject($"Chunk_{x}_{y}_{z}");
                 go.layer = gameObject.layer;
@@ -127,16 +135,16 @@ namespace Cubestruction.Voxels
         public Vector3 CellToWorld(Vector3Int c) => CellToWorld(new Vector3(c.x, c.y, c.z));
         public Vector3 CellToWorld(Vector3 c)
         {
-            float half = Grid.N * 0.5f;
-            var local = new Vector3((c.x - half + 0.5f) * cellSize, (c.y + 0.5f) * cellSize, (c.z - half + 0.5f) * cellSize);
+            float hx = Grid.NX * 0.5f, hz = Grid.NZ * 0.5f;
+            var local = new Vector3((c.x - hx + 0.5f) * cellSize, (c.y + 0.5f) * cellSize, (c.z - hz + 0.5f) * cellSize);
             return transform.TransformPoint(local);
         }
 
         public Vector3 WorldToCell(Vector3 world)
         {
             var l = transform.InverseTransformPoint(world);
-            float half = Grid.N * 0.5f;
-            return new Vector3(l.x / cellSize + half - 0.5f, l.y / cellSize - 0.5f, l.z / cellSize + half - 0.5f);
+            float hx = Grid.NX * 0.5f, hz = Grid.NZ * 0.5f;
+            return new Vector3(l.x / cellSize + hx - 0.5f, l.y / cellSize - 0.5f, l.z / cellSize + hz - 0.5f);
         }
 
         public Vector3Int WorldToCellInt(Vector3 world)
@@ -145,7 +153,7 @@ namespace Cubestruction.Voxels
             return new Vector3Int(Mathf.RoundToInt(c.x), Mathf.RoundToInt(c.y), Mathf.RoundToInt(c.z));
         }
 
-        public Vector3 Center => transform.TransformPoint(new Vector3(0, Grid.N * cellSize * 0.5f, 0));
+        public Vector3 Center => transform.TransformPoint(new Vector3(0, Grid.NY * cellSize * 0.5f, 0));
         public float HalfExtent => Grid.N * cellSize * 0.5f;
         /// <summary>World height of the top of the map as built (the cube's top; lower for shaped maps).</summary>
         public float ContentTopY => transform.position.y + (Grid != null ? Grid.ContentTop : 0) * cellSize;
@@ -211,22 +219,22 @@ namespace Cubestruction.Voxels
         /// <summary>Server only. Damage voxels in a sphere around a world point. Returns money awarded.</summary>
         public int ServerDamage(Vector3 worldPos, float radiusCells, float damage, int tier, bool explosive, ulong instigator)
         {
-            if (!IsServer || Grid == null || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
+            if (!IsServer || Grid == null) return 0;
             _killed.Clear();
-            Grid.ApplySphere(WorldToCell(worldPos), radiusCells, damage, tier, explosive, _killed, DamageFilter);
+            Grid.ApplySphere(WorldToCell(worldPos), radiusCells, damage, tier, explosive, _killed, Filter(instigator));
             return FinishKills(instigator);
         }
 
         /// <summary>Server only. Ray through the grid, damaging up to `pierce` cells (railgun) or the first hit.</summary>
         public int ServerDamageRay(Ray worldRay, float range, float radiusCells, float damage, int tier, int pierce, ulong instigator)
         {
-            if (!IsServer || !Raycast(worldRay, range, out var cell, out var point) || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out var point)) return 0;
             _killed.Clear();
             var dir = transform.InverseTransformDirection(worldRay.direction).normalized;
             var start = new Vector3(cell.x, cell.y, cell.z);
             int steps = Mathf.Max(1, pierce);
             for (int i = 0; i < steps; i++)
-                Grid.ApplySphere(start + dir * i, radiusCells, damage, tier, false, _killed, DamageFilter);
+                Grid.ApplySphere(start + dir * i, radiusCells, damage, tier, false, _killed, Filter(instigator));
             return FinishKills(instigator);
         }
 
@@ -245,7 +253,7 @@ namespace Cubestruction.Voxels
         {
             var counts = Loot.CountsFor(Grid.N);
             var rng = new System.Random(System.Environment.TickCount);
-            int total = Grid.N * Grid.N * Grid.N;
+            int total = Grid.Count;
             var want = (int[])counts.Clone();
             for (int tries = 0; tries < 400000; tries++)
             {
@@ -333,7 +341,7 @@ namespace Cubestruction.Voxels
         /// exposed voxels within range. Appends the bolt's world points to <paramref name="path"/>.</summary>
         public int ServerChain(Ray worldRay, float range, ToolDef t, ulong instigator, List<Vector3> path)
         {
-            if (!IsServer || !Raycast(worldRay, range, out var cell, out var p) || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out var p)) return 0;
             path.Add(p);
             _killed.Clear();
             var hit = new HashSet<int>();
@@ -342,7 +350,7 @@ namespace Cubestruction.Voxels
             for (int j = 0; j <= t.chainJumps; j++)
             {
                 hit.Add(Grid.Index(cur.x, cur.y, cur.z));
-                Grid.ApplySphere(new Vector3(cur.x, cur.y, cur.z), t.radiusCells, t.damage, t.tier, false, _killed, DamageFilter);
+                Grid.ApplySphere(new Vector3(cur.x, cur.y, cur.z), t.radiusCells, t.damage, t.tier, false, _killed, Filter(instigator));
                 path.Add(CellToWorld(cur));
                 bool found = false;
                 for (int k = 0; k < 80 && !found; k++)
@@ -389,17 +397,17 @@ namespace Cubestruction.Voxels
         /// <summary>Aqua Surge: carve a straight tunnel (spheres every ~0.75 radius along the ray).</summary>
         public int ServerCarveBeam(Vector3 originWorld, Vector3 dirWorld, float lengthM, float radiusCells, float damage, int tier, ulong instigator)
         {
-            if (!IsServer || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
+            if (!IsServer) return 0;
             _killed.Clear();
             var o = WorldToCell(originWorld);
             var d = transform.InverseTransformDirection(dirWorld).normalized;
             float step = Mathf.Max(0.5f, radiusCells * 0.75f), len = lengthM / cellSize;
-            int n = Grid.N;
+            var g = Grid;
             for (float s = 0; s <= len; s += step)
             {
                 var c = o + d * s;
-                if (c.x < -radiusCells || c.y < -radiusCells || c.z < -radiusCells || c.x > n + radiusCells || c.y > n + radiusCells || c.z > n + radiusCells) continue;
-                Grid.ApplySphere(c, radiusCells, damage, tier, false, _killed, DamageFilter);
+                if (c.x < -radiusCells || c.y < -radiusCells || c.z < -radiusCells || c.x > g.NX + radiusCells || c.y > g.NY + radiusCells || c.z > g.NZ + radiusCells) continue;
+                Grid.ApplySphere(c, radiusCells, damage, tier, false, _killed, Filter(instigator));
             }
             return FinishKills(instigator);
         }
@@ -413,7 +421,11 @@ namespace Cubestruction.Voxels
                     var m = MarkOf(idx);
                     if (m == CellMark.None) continue;
                     ServerUnmark(idx);
-                    if (m == CellMark.Loot) Loot.ServerGrant(instigator, Grid.layer[idx], CellToWorld(Grid.Coord(idx)));
+                    if (m == CellMark.Loot)
+                    {
+                        if (shapeMode.Value == 1) Siege.TitanDirector.Instance?.ServerLoot(instigator, CellToWorld(Grid.Coord(idx)));
+                        else Loot.ServerGrant(instigator, Grid.layer[idx], CellToWorld(Grid.Coord(idx)));
+                    }
                 }
             int money = 0;
             foreach (var idx in _killed) money += Grid.LayerOf(idx).value;

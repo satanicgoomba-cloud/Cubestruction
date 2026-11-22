@@ -21,6 +21,10 @@ namespace Cubestruction.Tools
 
         public ToolDef Def => Balance.Tool(toolIndex.Value);
         public ulong Owner { get; private set; }
+        /// <summary>Titan Siege: the Titan's hand holding this caught rocket (server).</summary>
+        Transform _heldHand;
+        float _heldSince;
+        public bool IsHeld => _heldHand != null;
 
         Rigidbody _rb;
         bool _stuck, _exploded;
@@ -101,6 +105,8 @@ namespace Cubestruction.Tools
 
             var t = Def;
             if (t == null) return;
+            if (_heldHand != null) { TickHeld(); return; }
+            if (IsRocket(t) && Siege.TitanDirector.ServerRocketNearTitan(this)) return;
             if (_pulsesLeft > 0 && fuseLeft.Value <= 0)
             {
                 // Vortex Orb: hover, pull players in, crush in pulses
@@ -120,8 +126,50 @@ namespace Cubestruction.Tools
             if (fuseLeft.Value <= 0 && _pulsesLeft == 0) ServerExplode();
         }
 
+        /// <summary>Server: the Titan caught this rocket. It sits in the hand until thrown.</summary>
+        public void ServerCatch(Transform hand, ulong titanOwner)
+        {
+            if (_exploded) return;
+            _heldHand = hand;
+            _heldSince = Time.time;
+            Owner = titanOwner;
+            _rb.isKinematic = true;
+            var d = Siege.TitanDirector.Instance;
+            var body = d ? d.Body : null;
+            var myCol = GetComponent<Collider>();
+            if (body && myCol)
+                foreach (var col in body.transform.GetComponentsInChildren<Collider>()) Physics.IgnoreCollision(myCol, col);
+        }
+
+        void TickHeld()
+        {
+            var d = Siege.TitanDirector.Instance;
+            var body = d ? d.Body : null;
+            if (!body || _heldHand == null) { ServerExplode(); return; }
+            transform.position = _heldHand.position + _heldHand.forward * 0.06f * body.WorldScale;
+            bool left = _heldHand == body.leftHand;
+            bool stillHeld = body.bot ? Time.time - _heldSince < 0.8f
+                                      : body.player && (body.player.handPose.Value & (left ? 1 : 2)) != 0;
+            if (stillHeld && Time.time - _heldSince < 12f) return;
+            // let go: thrown back with the hand's swing (the AI Titan aims at the nearest defender)
+            Vector3 v = d.HandVelocity(left) * 1.6f;
+            if (body.bot)
+            {
+                var target = d.NearestDefender(transform.position);
+                v = target.HasValue ? (target.Value - transform.position).normalized * 30f + Vector3.up * 3f : body.transform.forward * 30f;
+            }
+            if (v.magnitude < 6f) v = v.normalized * 6f + Vector3.up * 2f;
+            _heldHand = null;
+            _rb.isKinematic = false;
+            _rb.useGravity = true;
+            _rb.linearVelocity = Vector3.ClampMagnitude(v, 45f);
+            fuseLeft.Value = 4f;
+            Siege.TitanDirector.RocketsThrownBack++;
+        }
+
         void OnCollisionEnter(Collision c)
         {
+            if (_heldHand != null) return;
             if (!IsServer || _exploded) return;
             var t = Def; if (t == null) return;
             if (IsRocket(t)) { ServerExplode(); return; }

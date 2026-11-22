@@ -75,7 +75,7 @@ namespace Cubestruction
             var players = PlayerAvatar.All.ToList();
 
             bool titan = m == GameMode.TitanSiege;
-            int n = m == GameMode.GodSiege ? Balance.Siege.cubeSize : titan ? Siege.TitanMap.Size : miningCubeSize;
+            int n = m == GameMode.GodSiege ? Balance.Siege.cubeSize : titan ? Siege.TitanMap.SizeX : miningCubeSize;
             _cube = Instantiate(cubePrefab, pedestal ? pedestal.position : Vector3.zero, Quaternion.identity);
             var vc = _cube.GetComponent<VoxelCube>();
             // In siege the cube isn't mined by players, so no co-op scaling.

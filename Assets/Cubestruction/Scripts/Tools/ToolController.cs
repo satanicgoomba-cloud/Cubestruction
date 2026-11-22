@@ -406,6 +406,12 @@ namespace Cubestruction.Tools
                     bool fire = supported && h.cooldown <= 0 && h.spin >= 1 && (auto ? h.trigger : pressed);
                     if (!fire) break;
                     var ray = Aim(h, t);
+                    if (t.id == "RocketLauncher" && _avatar.role.Value == PlayerRole.Defender && _avatar.ammoRockets.Value <= 0)
+                    {
+                        UI.GameMenus.Instance?.Toast("No rockets! Dig the mine wall behind you with the sledgehammer.", AeroPalette.Danger);
+                        h.cooldown = 0.6f;
+                        break;
+                    }
                     if (t.id == "RocketLauncher") { var m = Muzzle(h, ray, scale, out var rd); ThrowRpc(t.index, m, rd * 32f); }
                     else if (t.IsProjectile)
                     {
@@ -1039,6 +1045,12 @@ namespace Cubestruction.Tools
             var t = Balance.Tool(tool);
             if (!ServerCheck(t, pos, 4f)) return;
             if (t.consumable && !_avatar.ServerConsumeCharge(tool)) return;
+            // Titan Siege: the RPG fires rockets you dug out of the mine wall
+            if (t.id == "RocketLauncher" && _avatar.role.Value == PlayerRole.Defender)
+            {
+                if (_avatar.ammoRockets.Value <= 0) return;
+                _avatar.ammoRockets.Value--;
+            }
             SpawnExplosive(t, pos, vel);
             if (clonesOn.Value && t.cat == ToolCategory.Throwable) foreach (var off in CloneOffsetsWorld()) SpawnExplosive(t, pos + off, vel);
         }

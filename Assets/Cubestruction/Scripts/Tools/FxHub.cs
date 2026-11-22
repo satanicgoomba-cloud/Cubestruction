@@ -50,7 +50,10 @@ namespace Cubestruction.Tools
 
         /// <summary>Chain Zapper bolt through the voxels it hit (everyone, including the shooter).</summary>
         [Rpc(SendTo.ClientsAndHost)]
-        public void LightningRpc(Vector3[] points)
+        public void LightningRpc(Vector3[] points) => LightningLocal(points);
+
+        /// <summary>Draw a lightning bolt on this peer only.</summary>
+        public void LightningLocal(Vector3[] points)
         {
             if (points == null || points.Length < 2) return;
             LightningBolts++;

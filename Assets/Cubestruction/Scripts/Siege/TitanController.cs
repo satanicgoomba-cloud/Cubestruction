@@ -6,8 +6,12 @@ using UnityEngine.InputSystem;
 namespace Cubestruction.Siege
 {
     /// <summary>
-    /// The Titan (owner only; enabled by PlayerAvatar.ApplyRole). You're ~6.5 m tall and slow-but-heavy.
+    /// The Titan (owner only; enabled by PlayerAvatar.ApplyRole). You start as a little Buddy at the foot of
+    /// wall 1; when the prep time runs out, bite your hand (VR: bring a hand to your mouth; desktop: B) and
+    /// lightning turns you into the Titan: ~6.5 m tall and slow-but-heavy.
     /// VR:
+    ///   Grip near a defender      grab them; let go to throw.  Grip as an RPG reaches your hand: catch it, throw it back
+    ///   Open hand in an RPG's way block it (a quarter of the damage)
     ///   Hands through voxels      scrape (no cooldown, it just grinds)    a fast punch   big dent, bigger the harder
     ///   Walking into walls        your legs grind them too
     ///   A / X                     kick with the right / left leg (you stop for a moment; huge hit)
@@ -29,6 +33,16 @@ namespace Cubestruction.Siege
         Vector3 _rHome;
 
         public const float WalkMul = 0.22f;
+        float _biteHeld, _grownAt = -1;
+        bool _biteHint;
+        readonly ulong[] _grabbed = { ulong.MaxValue, ulong.MaxValue };
+        public static int BitesSent;   // -autotest
+        public static byte TestPose;   // -autotest: force fists closed
+
+        public static void ShowBiteHint() { if (_local) _local._biteHint = true; }
+        public static void OnCaught(bool left) { Haptic(left, 1f, 0.2f); UI.GameMenus.Instance?.Toast("Caught it! Swing and let go to throw it back.", AeroPalette.Gold); }
+
+        bool Transformed => TitanDirector.Instance != null && TitanDirector.Instance.transformed.Value;
 
         void OnEnable()
         {
@@ -37,8 +51,9 @@ namespace Cubestruction.Siege
             _motor = GetComponent<PlayerMotor>();
             _vr = GetComponent<VRRig>();
             _flat = GetComponent<FlatRig>();
-            _motor.speedMul = WalkMul;
-            _motor.canJump = false;
+            _motor.speedMul = 1f;     // a little Buddy until the bite
+            _motor.canJump = true;
+            _grownAt = -1; _biteHint = false;
             _motor.OnHit += OnBodyHit;
             if (IsVR)
             {
@@ -52,6 +67,8 @@ namespace Cubestruction.Siege
         void OnDisable()
         {
             if (_local == this) _local = null;
+            for (int i = 0; i < 2; i++) ReleaseGrab(i, Vector3.zero);
+            _motor.WorldScale = 1f;
             _motor.speedMul = 1f;
             _motor.canJump = true;
             _motor.OnHit -= OnBodyHit;
@@ -88,12 +105,23 @@ namespace Cubestruction.Siege
         void Update()
         {
             var d = TitanDirector.Instance;
-            _motor.climbHeld = false;            // giants don't climb
+            _motor.climbHeld = false;            // giants (and Buddies about to be giants) don't climb
             _motor.climbDelta = Vector3.zero;
             _motor.reelIn = false;
-            bool locked = TitanDirector.InputLocked(_avatar) || Time.time < _kickLockUntil;
-            if (locked) { _motor.moveIntent = Vector3.zero; _motor.sprint = false; }
             if (d == null || !d.IsActive) { UpdateLabel(d); return; }
+
+            if (!Transformed) { TickBuddy(d); UpdateLabel(d); return; }
+
+            // just bitten: grow into the Titan over 1.5 s (rooted while it happens)
+            if (_grownAt < 0) _grownAt = Time.time;
+            float grow = Mathf.Clamp01((Time.time - _grownAt) / 1.5f);
+            float wantScale = Mathf.Lerp(1f, TitanDirector.Scale, grow * grow * (3f - 2f * grow));
+            if (Mathf.Abs(_motor.WorldScale - wantScale) > 0.001f) _motor.WorldScale = wantScale;
+            _motor.speedMul = WalkMul * (1f + 0.25f * d.rage.Value);   // rage: faster
+            _motor.canJump = false;
+            bool locked = grow < 1f || Time.time < _kickLockUntil;
+            if (locked) { _motor.moveIntent = Vector3.zero; _motor.sprint = false; }
+            SyncHands();
 
             if (IsVR) TickVR(d, locked);
             else TickDesktop(d, locked);
@@ -105,12 +133,72 @@ namespace Cubestruction.Siege
         void TickVR(TitanDirector d, bool locked)
         {
             if (!locked && (_kickR.WasPressedThisFrame() || _kickL.WasPressedThisFrame())) Kick(d, _kickL.WasPressedThisFrame());
-            if (locked && TitanDirector.InputLocked(_avatar)) return;
             for (int i = 0; i < 2; i++)
             {
                 var h = i == 0 ? _vr.Left : _vr.Right;
-                Limb(d, (byte)i, h.t.position, h.velocity);
+                if (h.grip.WasPressedThisFrame() && _grabbed[i] == ulong.MaxValue) TryGrab(d, i, h.t.position);
+                else if (h.grip.WasReleasedThisFrame()) ReleaseGrab(i, h.velocity * 1.4f);
+                if (_grabbed[i] == ulong.MaxValue) Limb(d, (byte)i, h.t.position, h.velocity);
             }
+        }
+
+        // ------------------------------------------------------------------ the little Buddy phase
+
+        void TickBuddy(TitanDirector d)
+        {
+            if (Mathf.Abs(_motor.WorldScale - 1f) > 0.001f) _motor.WorldScale = 1f;
+            _motor.speedMul = 1f; _motor.canJump = true;
+            // stay out on the field in front of wall 1
+            float limit = TitanMap.WallNearZ(d.Origin, 0) - 1.5f;
+            if (transform.position.z > limit) _motor.Teleport(new Vector3(transform.position.x, transform.position.y, limit), transform.eulerAngles.y);
+            if (d.prep.Value) return;
+            // bite your hand: VR, a hand at your mouth for a moment; desktop, B
+            bool biting = false;
+            if (IsVR)
+            {
+                var head = _avatar.headAnchor;
+                var mouth = head.position - head.up * 0.07f + head.forward * 0.06f;
+                biting = Vector3.Distance(_vr.Left.t.position, mouth) < 0.13f || Vector3.Distance(_vr.Right.t.position, mouth) < 0.13f;
+            }
+            else biting = Keyboard.current != null && Keyboard.current.bKey.isPressed || (_flat && _flat.UseHeld);
+            _biteHeld = biting ? _biteHeld + Time.deltaTime : 0;
+            if (_biteHeld > 0.15f) { _biteHeld = -10f; d.BiteRpc(); BitesSent++; Haptic(true, 1f, 0.3f); Haptic(false, 1f, 0.3f); }
+        }
+
+        // ------------------------------------------------------------------ grabbing defenders
+
+        void TryGrab(TitanDirector d, int i, Vector3 handPos)
+        {
+            float r = 0.25f * _motor.WorldScale + 1f, best = r;
+            ulong id = ulong.MaxValue;
+            foreach (var p in PlayerAvatar.All)
+                if (p.role.Value == PlayerRole.Defender) { float dd = Vector3.Distance(handPos, p.Motor.Chest); if (dd < best) { best = dd; id = p.OwnerClientId; } }
+            foreach (var b in FindObjectsByType<DefenderBot>(FindObjectsSortMode.None))
+            { float dd = Vector3.Distance(handPos, b.transform.position + Vector3.up * 0.5f); if (dd < best) { best = dd; id = b.BotId; } }
+            if (id == ulong.MaxValue) return;
+            _grabbed[i] = id;
+            d.GrabDefenderRpc(id, i == 0);
+            Haptic(i == 0, 0.7f, 0.1f);
+        }
+
+        void ReleaseGrab(int i, Vector3 vel)
+        {
+            if (_grabbed[i] == ulong.MaxValue) return;
+            TitanDirector.Instance?.ReleaseDefenderRpc(_grabbed[i], vel);
+            _grabbed[i] = ulong.MaxValue;
+        }
+
+        /// <summary>Everyone sees the fists close (and the server knows when you're catching).</summary>
+        void SyncHands()
+        {
+            byte pose = 0;
+            if (IsVR)
+            {
+                if (_vr.Left.grip.IsPressed()) pose |= 1; if (_vr.Right.grip.IsPressed()) pose |= 2;
+            }
+            else if (Keyboard.current != null && Keyboard.current.gKey.isPressed) pose |= 3;   // desktop: hold G to catch
+            pose |= TestPose;
+            if (_avatar.handPose.Value != pose) _avatar.handPose.Value = pose;
         }
 
         /// <summary>A hand touching voxels: scrape it (12 times a second), the server decides scrape vs punch.</summary>
@@ -161,7 +249,6 @@ namespace Cubestruction.Siege
             if (cam == null) return;
             float s = _motor.WorldScale;
             if (!locked && kb != null && kb.fKey.wasPressedThisFrame) Kick(d, false);
-            if (TitanDirector.InputLocked(_avatar)) return;
             var ray = new Ray(cam.transform.position, cam.transform.forward);
             bool menus = UI.GameMenus.Instance != null && UI.GameMenus.Instance.BlocksGameplayInput;
 
@@ -220,12 +307,21 @@ namespace Cubestruction.Siege
             if (!_label) return;
             _hurtFlash = Mathf.Max(0, _hurtFlash - Time.deltaTime);
             if (d == null || !d.IsActive) { _label.text = "TITAN\nwaiting for the siege..."; return; }
+            if (!Transformed)
+            {
+                _label.text = d.prep.Value
+                    ? $"You're a little Buddy... for now.\nThe defenders are digging in: {Mathf.CeilToInt(d.prepLeft.Value)}s\n<size=28>When time's up, bite your hand</size>"
+                    : (IsVR ? "BITE YOUR HAND!\n<size=28>bring a hand up to your mouth</size>" : "BITE YOUR HAND!\n<size=28>press B</size>");
+                _label.color = d.prep.Value ? new Color(0.9f, 0.95f, 1f) : new Color(1f, 0.85f, 0.3f);
+                return;
+            }
             float hp = d.titanHp.Value, max = Mathf.Max(1f, d.titanMaxHp.Value);
             int filled = Mathf.RoundToInt(10f * hp / max);
             string bar = new string('|', filled) + new string('.', 10 - filled);
             string state = d.prep.Value ? $"Defenders are loading their guns: {Mathf.CeilToInt(d.prepLeft.Value)}s"
                                         : $"Break wall {d.wall.Value + 1} of 3   {MatchManager.FormatTime(d.timeLeft.Value)}";
-            string hint = IsVR ? "swing through walls: scrape   fast punch: dent   A/X: kick" : "LMB punch   RMB scrape   F kick";
+            string hint = IsVR ? "swing through walls: scrape   fast punch: dent   A/X: kick   grip: grab / catch" : "LMB punch   RMB scrape   F kick   hold G: catch";
+            if (d.rage.Value > 0) hint = (d.rage.Value == 2 ? "BERSERK!  " : "ENRAGED!  ") + hint;
             _label.text = $"TITAN  [{bar}] {hp:0}\n{state}\n<size=28>{hint}</size>";
             _label.color = _hurtFlash > 0 ? new Color(1f, 0.4f, 0.35f) : new Color(1f, 0.92f, 0.8f);
         }

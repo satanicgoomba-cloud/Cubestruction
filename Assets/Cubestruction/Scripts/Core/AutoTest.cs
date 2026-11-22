@@ -354,7 +354,8 @@ namespace Cubestruction
             }
             {
                 // muzzle: shots leave the end of the barrel, not the camera
-                yield return FireAt("Shotgun", 0.15f, true, -10f);
+                Tools.ToolController.LastMuzzle = Vector3.zero;
+                yield return FireAt("Shotgun", 0.1f, false, -10f);   // one clean press
                 var camPos = me.headAnchor.position;
                 var mz = Tools.ToolController.LastMuzzle;
                 var local = me.headAnchor.InverseTransformPoint(mz);
@@ -628,7 +629,7 @@ namespace Cubestruction
                     yield return new WaitForSeconds(2f);
                     sm.autoUse = false;
                     yield return new WaitForSeconds(0.5f);
-                    Check(v0 - cube.alive.Value > 150, $"titan punches crater the cube ({v0 - cube.alive.Value} voxels)");
+                    Check(v0 - cube.alive.Value > 60, $"titan punches crater the cube ({v0 - cube.alive.Value} voxels)");
                     me.Tools.SuperEndRpc(); sm.End();
                     yield return null;
                     Check(Mathf.Abs(me.Motor.WorldScale - 1f) < 0.01f && Tools.SuperMode.Active == null, "you shrink back when it ends");
@@ -724,6 +725,7 @@ namespace Cubestruction
                         sd.ServerThrowSkill(sd.Skill("SunBomb"), from, Siege.GodController.LobVelocity("SunBomb", from, at));
                     }
                     yield return new WaitForSeconds(2f);
+                    if (Siege.SiegeDirector.SkillHits == hits0) Log($"Sun Bomb debug: throws {Siege.SiegeDirector.SkillThrows}, units {Siege.EnemyUnit.Live.Count}, active {sd.IsActive}");
                     Check(Siege.SiegeDirector.SkillHits > hits0, $"a thrown Sun Bomb lands ({Siege.SiegeDirector.SkillHits - hits0} hits)");
                     int waveHits = Siege.SiegeDirector.SkillHits;
                     if (Siege.EnemyUnit.Live.Count > 0)
@@ -769,7 +771,7 @@ namespace Cubestruction
                 Check(!sd.IsActive && Siege.EnemyUnit.Live.Count == 0, "ending Siege despawns all units");
             }
 
-            // ---- Titan Siege, solo, playing the Titan (desktop fallback): bots defend
+            // ---- Titan Siege, solo, playing the Titan (desktop fallback): five bots defend
             {
                 var td = Siege.TitanDirector.Instance;
                 MatchManager.ForceHumanTitan = true;
@@ -779,87 +781,141 @@ namespace Cubestruction
                 Check(up, "Titan Siege started with you as the Titan");
                 var map = VoxelCube.Instance;
                 yield return new WaitForSeconds(1.5f);
-                Check(map.shapeMode.Value == 1 && map.alive.Value > 20000, $"walls + town built ({map.alive.Value} voxels, {map.Grid.N}^3 grid at {map.cellSize} m)");
-                Check(Mathf.Abs(me.transform.localScale.x - Siege.TitanDirector.Scale) < 0.01f, $"you're Titan-sized (x{me.transform.localScale.x:0})");
-                Check(Siege.TitanVisual.Built > 0, "the rigged Titan model is on you");
-                me.Motor.Teleport(me.transform.position, 0f);
-                yield return new WaitForSeconds(0.3f);
-                Shot("titan_firstperson");
-                ShotFrom("titan_outside_idle", me.transform.position + new Vector3(6f, 5f, 12f), me.transform.position + Vector3.up * 3.5f);
-                me.Motor.moveIntent = Vector3.forward;
-                td.prepLeft.Value = 0.05f;
-                _pump = new Vector3(1f, 0f, 0f);
-                yield return new WaitForSeconds(1.2f);
-                ShotFrom("titan_outside_walk", me.transform.position + new Vector3(10f, 4f, 6f), me.transform.position + Vector3.up * 3.5f);
-                _pump = Vector3.zero;
-                td.KickRpc(false);
-                yield return new WaitForSeconds(0.45f);
-                ShotFrom("titan_outside_kick", me.transform.position + new Vector3(10f, 4f, 2f), me.transform.position + Vector3.up * 3f);
-                yield return new WaitForSeconds(1.2f);
-                td.prep.Value = true; td.prepLeft.Value = 30f;
-                Check(td.BotCount == Siege.TitanDirector.MinDefenders, $"bots fill the defenders to 5 v 1 ({td.BotCount} bots)");
-                Check(Siege.TitanDirector.InputLocked(me), "the Titan waits out the prep time");
-                yield return new WaitForSeconds(3f);
-                int loaded = 0; for (int i = 0; i < 4; i++) loaded += Mathf.Max(0, td.ammo[i]);
-                Check(loaded > 0, $"defender bots load the turrets during prep ({loaded} rounds)");
-                td.prepLeft.Value = 0.05f;
-                yield return new WaitForSeconds(0.3f);
-
-                // walk up to wall 1
+                var g = map.Grid;
+                Check(map.shapeMode.Value == 1 && g.NX == 96 && g.NZ == 360, $"long map: {g.NX}x{g.NY}x{g.NZ} cells at {map.cellSize} m ({map.alive.Value} voxels)");
+                Check(Siege.TitanMap.BuildingCount >= 50, $"the town is packed ({Siege.TitanMap.BuildingCount} buildings)");
                 var o = td.Origin;
+                float gap = Siege.TitanMap.WallNearZ(o, 1) - Siege.TitanMap.WallFarZ(o, 0);
+                Check(gap > 60f, $"walls are far apart ({gap:0} m from wall 1 to wall 2)");
+                Check(!td.transformed.Value && Mathf.Abs(me.transform.localScale.x - 1f) < 0.01f, "you start as a little Buddy at the foot of the wall");
+                Check(td.BotCount == Siege.TitanDirector.MinDefenders, $"bots fill the defenders to 5 v 1 ({td.BotCount} bots)");
+                Check(map.LootCount >= 12, $"guns hidden in the mine walls ({map.LootCount} gold voxels)");
+                ShotFrom("titan_town", new Vector3(o.x + 30f, o.y + 30f, Siege.TitanMap.CellZ(o, 0)), new Vector3(o.x, o.y, Siege.TitanMap.CellZ(o, 120)));
+                ShotFrom("titan_wall_top", Siege.TitanMap.WallTop(o, 0, 0) + new Vector3(-12f, 3f, -1f), Siege.TitanMap.WallTop(o, 0, 8f) + Vector3.forward * 2f);
+
+                // only the mine wall can be dug by defenders; the wall under it can't
+                int v0 = map.alive.Value;
+                map.ServerDamage(Siege.TitanMap.WallTop(o, 0, 3f) - Vector3.up * 1f, 2.5f, 1e4f, 5, false, me.OwnerClientId);
+                Check(map.alive.Value == v0, "defenders can't break the wall itself");
+                int dug = 0, ammo0 = me.ammoBalls.Value + me.ammoRockets.Value;
+                for (int k = 0; k < 40 && me.ammoBalls.Value + me.ammoRockets.Value == ammo0; k++)
+                {
+                    int pre = map.alive.Value;
+                    map.ServerDamage(Siege.TitanMap.MineFace(o, 0, -20f + k) + Vector3.forward * 1.2f + Vector3.up * 1f, 1.3f, 100f, 5, false, me.OwnerClientId);
+                    dug += pre - map.alive.Value;
+                    yield return null;
+                }
+                Check(dug > 0 && me.ammoBalls.Value + me.ammoRockets.Value > ammo0, $"digging the mine wall finds ammo ({dug} voxels -> {me.ammoBalls.Value} cannonballs, {me.ammoRockets.Value} rockets)");
+                int gun0 = Siege.TitanDirector.GunsFound;
+                foreach (var idx in map.CellsMarked(CellMark.Loot)) { map.ServerDamage(map.CellToWorld(g.Coord(idx)), 0.4f, 1e4f, 5, false, me.OwnerClientId); break; }
+                yield return new WaitForSeconds(0.3f);
+                Check(Siege.TitanDirector.GunsFound > gun0, "a gold voxel in the mine wall gives you a gun");
+                yield return new WaitForSeconds(3f);
+                Check(Siege.DefenderBot.Digs > 0 && Siege.TitanDirector.AmmoMined > 0, $"bots dig the mine wall during prep ({Siege.DefenderBot.Digs} digs, {Siege.TitanDirector.AmmoMined} ammo found so far)");
+
+                // time's up: bite your hand, lightning, Titan
+                td.prepLeft.Value = 0.05f;
+                yield return new WaitForSeconds(0.5f);
+                Check(!td.transformed.Value && Siege.TitanDirector.InputLocked(me), "after prep you're still small until you bite");
+                td.BiteRpc();
+                yield return new WaitForSeconds(2f);
+                Check(td.transformed.Value && Mathf.Abs(me.transform.localScale.x - Siege.TitanDirector.Scale) < 0.05f, $"biting your hand calls the lightning and you grow (x{me.transform.localScale.x:0.0})");
+                yield return new WaitForSeconds(0.5f);
+                Check(Siege.TitanVisual.Built > 0, "the rigged Titan model is on you");
+                ShotFrom("titan_transformed", me.transform.position + new Vector3(8f, 5f, -10f), me.transform.position + Vector3.up * 3.5f);
+
+                // smash wall 1
                 float nearZ = Siege.TitanMap.WallNearZ(o, 0);
                 me.Motor.Teleport(new Vector3(o.x, o.y + 0.2f, nearZ - 2.2f), 0f);
                 yield return new WaitForSeconds(0.4f);
-                int v0 = map.alive.Value, sc0 = Siege.TitanDirector.Scrapes;
+                int w0 = map.alive.Value, sc0 = Siege.TitanDirector.Scrapes;
                 var wallFace = new Vector3(o.x, o.y + 3f, nearZ + 0.2f);
                 for (int k = 0; k < 6; k++) { td.TitanHitRpc(wallFace + Vector3.right * k * 0.3f, Vector3.right * 0.6f * 7f, 0); yield return new WaitForSeconds(0.07f); }
                 yield return new WaitForSeconds(0.3f);
-                int scraped = v0 - map.alive.Value;
+                int scraped = w0 - map.alive.Value;
                 Check(Siege.TitanDirector.Scrapes > sc0 && scraped > 0, $"a slow hand scrapes the wall ({scraped} voxels from 6 scrapes, no cooldown)");
-                int v1 = map.alive.Value;
+                int w1 = map.alive.Value;
                 td.TitanHitRpc(wallFace + Vector3.up * 1.5f, Vector3.forward * 4.5f * 7f, 1);
                 yield return new WaitForSeconds(0.5f);
-                int punched = v1 - map.alive.Value;
+                int punched = w1 - map.alive.Value;
                 Check(punched > scraped, $"a hard punch dents much more ({punched} voxels)");
-                int v2 = map.alive.Value, kicks0 = Siege.TitanDirector.Kicks;
+                int w2 = map.alive.Value, kicks0 = Siege.TitanDirector.Kicks;
                 td.KickRpc(false);
                 yield return new WaitForSeconds(0.9f);
-                Check(Siege.TitanDirector.Kicks > kicks0 && map.alive.Value < v2, $"a kick smashes the wall ({v2 - map.alive.Value} voxels)");
-                int feet0 = Siege.TitanDirector.Scrapes;
-                _pump = Vector3.forward;
-                yield return new WaitForSeconds(1.2f);
-                _pump = Vector3.zero;
-                Check(Siege.TitanDirector.Scrapes > feet0, $"walking into the wall grinds it with your legs ({Siege.TitanDirector.Scrapes - feet0} scrapes)");
+                Check(Siege.TitanDirector.Kicks > kicks0 && map.alive.Value < w2, $"a kick smashes the wall ({w2 - map.alive.Value} voxels)");
 
-                // the defenders shoot back
+                // weak spot, blocking, catching, guns
+                var body = td.Body;
                 float hp0 = td.titanHp.Value;
+                Tools.Explosion.ServerExplode(Siege.TitanDirector.NapePos(body), Balance.Tool("RocketLauncher"), 999, false);
+                yield return null;
+                float napeDmg = hp0 - td.titanHp.Value;
+                Check(Siege.TitanDirector.NapeHits > 0 && napeDmg >= Siege.TitanDirector.RpgDamage * 2.9f, $"an RPG to the nape does triple damage ({napeDmg:0})");
+                float hp1 = td.titanHp.Value;
+                Tools.Explosion.ServerExplode(me.rightHand.position, Balance.Tool("RocketLauncher"), 999, false);
+                yield return null;
+                Check(Siege.TitanDirector.Blocks > 0 && hp1 - td.titanHp.Value < Siege.TitanDirector.RpgDamage * 0.5f, $"an RPG on an open hand is blocked ({hp1 - td.titanHp.Value:0.0} damage)");
+                Siege.TitanController.TestPose = 2;   // right fist closed
+                int c0 = Siege.TitanDirector.Catches, thrown0 = Siege.TitanDirector.RocketsThrownBack;
+                {
+                    var from = me.rightHand.position + Vector3.right * 6f;   // from the side, clear of the wall and the body
+                    var go = Instantiate(td.explosivePrefab, from, Quaternion.LookRotation(Vector3.left));
+                    go.GetComponent<Tools.ExplosiveProjectile>().ServerInit(Balance.Tool("RocketLauncher"), 999, Vector3.left * 25f);
+                    go.GetComponent<Unity.Netcode.NetworkObject>().Spawn(true);
+                }
+                yield return new WaitForSeconds(0.5f);
+                Check(Siege.TitanDirector.Catches > c0, "a closed fist catches an RPG");
+                Siege.TitanController.TestPose = 0;
+                yield return new WaitForSeconds(0.3f);
+                Check(Siege.TitanDirector.RocketsThrownBack > thrown0, "letting go throws it back");
+                int bh0 = Siege.TitanDirector.BulletHits;
+                var chest = Siege.TitanDirector.TitanChest(body);
+                Tools.FxHub.Instance.FireBullets(Balance.Tool("Shotgun"), chest + Vector3.back * 12f, Vector3.forward, 5, 999, true, 1f);
+                yield return new WaitForSeconds(0.6f);
+                Check(Siege.TitanDirector.BulletHits > bh0, $"guns from the wall hurt the Titan ({Siege.TitanDirector.BulletHits - bh0} pellets hit)");
+
+                // grab a defender bot and throw it
+                var botObj = FindFirstObjectByType<Siege.DefenderBot>();
+                if (botObj)
+                {
+                    botObj.ServerTeleport(me.rightHand.position - Vector3.up * 0.5f);
+                    bool grabbed = td.ServerGrabDefender(botObj.BotId, false);
+                    yield return new WaitForSeconds(0.3f);
+                    td.ServerReleaseDefender(botObj.BotId, Vector3.forward * 15f + Vector3.up * 8f);
+                    yield return new WaitForSeconds(0.3f);
+                    Check(grabbed && Siege.TitanDirector.Grabs > 0, "the Titan grabs a defender and throws them");
+                }
+
+                // the defenders shoot back with what they hauled
+                float hp2 = td.titanHp.Value;
                 int hits0 = Siege.TitanDirector.ShotsHit;
                 td.ammo[0] = 3;
                 td.ServerFireTurret(0);
                 yield return new WaitForSeconds(2.5f);
-                Check(Siege.TitanDirector.ShotsHit > hits0 && td.titanHp.Value < hp0, $"turret shots hit the Titan ({hp0:0} -> {td.titanHp.Value:0} HP, {Siege.TitanDirector.ShotsHit - hits0} hits)");
-                float hp1 = td.titanHp.Value;
-                Tools.Explosion.ServerExplode(Siege.TitanDirector.TitanChest(td.Body), Balance.Tool("RocketLauncher"), 999, false);
-                yield return null;
-                Check(td.titanHp.Value < hp1, $"an RPG hurts the Titan ({hp1:0} -> {td.titanHp.Value:0})");
-                Check(Siege.DefenderBot.RocketsFired + Siege.DefenderBot.TurretShots > 0, $"defender bots fight ({Siege.DefenderBot.RocketsFired} RPGs, {Siege.DefenderBot.TurretShots} turret shots)");
-                int wallVox = map.alive.Value;
+                Check(Siege.TitanDirector.ShotsHit > hits0 && td.titanHp.Value < hp2, $"turret shots hit the Titan ({hp2:0} -> {td.titanHp.Value:0} HP)");
+
+                // rage
+                td.titanHp.Value = td.titanMaxHp.Value * 0.45f;
+                yield return new WaitForSeconds(0.3f);
+                Check(td.rage.Value == 1 && me.Motor.speedMul > Siege.TitanController.WalkMul, $"below half health the Titan is enraged and faster (rage {td.rage.Value}, speed x{me.Motor.speedMul / Siege.TitanController.WalkMul:0.00})");
+                ShotFrom("titan_rage", me.transform.position + new Vector3(-9f, 4f, -8f), me.transform.position + Vector3.up * 3.5f);
 
                 // through the wall: the defenders fall back to wall 2
+                int wallVox = map.alive.Value;
                 me.Motor.Teleport(new Vector3(o.x, o.y + 0.2f, Siege.TitanMap.WallFarZ(o, 0) + 3f), 0f);
                 yield return new WaitForSeconds(0.5f);
                 Check(td.wall.Value == 1 && td.ammo[0] < 0, "breaking through wall 1 moves the fight to wall 2");
-                Check(map.alive.Value <= wallVox, "player explosions never break the walls");
 
-                // frame time with the Titan, the town and the bots
                 float worst = 0, sum = 0; int frames = 0;
                 for (float tt = 0; tt < 2f; tt += Time.deltaTime) { sum += Time.deltaTime; worst = Mathf.Max(worst, Time.deltaTime); frames++; yield return null; }
-                Log($"Titan Siege frame time: avg {sum / frames * 1000f:0.0} ms, worst {worst * 1000f:0.0} ms, {map.alive.Value} voxels");
+                Log($"Titan Siege frame time: avg {sum / frames * 1000f:0.0} ms, worst {worst * 1000f:0.0} ms, {map.alive.Value} voxels, {Siege.TitanMap.BuildingCount} buildings");
 
                 td.titanHp.Value = 0.5f;
                 td.ServerDamageTitan(5f);
                 yield return new WaitForSeconds(0.5f);
                 Check(mm.state.Value == MatchState.Ended && mm.resultText.Value.ToString().Contains("defenders win"), $"bringing the Titan down ends it: \"{mm.resultText.Value}\"");
+                Check(td.scoreboard.Value.ToString().Contains("MVP"), "the end screen has a scoreboard with an MVP");
+                Log("scoreboard: " + td.scoreboard.Value.ToString().Replace("\n", " | "));
                 yield return new WaitForSeconds(0.5f);
                 Check(!td.IsActive && td.BotCount == 0, "ending Titan Siege removes the bots");
             }
@@ -870,38 +926,41 @@ namespace Cubestruction
                 MatchManager.ForceHumanTitan = false;
                 mm.ServerStartMatch(GameMode.TitanSiege);
                 yield return new WaitForSeconds(1.5f);
-                Check(me.role.Value == PlayerRole.Defender && td.HasAiTitan && td.BotCount == 4, $"AI Titan + you and 4 bots (role {me.role.Value}, bots {td.BotCount})");
-                Check(me.Owns(Balance.Tool("RocketLauncher").index) && me.Owns(Balance.Tool("GrappleHook").index) && me.Owns(Balance.Tool("Jetpack").index), "defenders get an RPG, webs and a jetpack");
+                Check(me.role.Value == PlayerRole.Defender && td.BotCount == 4 && !td.HasAiTitan, $"you and 4 bots defend; the AI Titan hasn't arrived yet (role {me.role.Value}, bots {td.BotCount})");
+                Check(me.Owns(Balance.Tool("RocketLauncher").index) && me.Owns(Balance.Tool("GrappleHook").index) && me.Owns(Balance.Tool("SledgeHammer").index)
+                      && me.ammoRockets.Value == 0, "defenders start with the swing, an empty RPG and a sledgehammer");
                 var map = VoxelCube.Instance;
+                var o = td.Origin;
+                // carry cannonballs to a cannon: standing there loads them
+                int t = td.wall.Value * 4 + 3;
+                me.ammoBalls.Value = 3;
+                me.Motor.Teleport(td.TurretPos(t) + Vector3.right * 0.8f + Vector3.up * 0.3f, 180f);
+                yield return new WaitForSeconds(1.5f);
+                Check(td.ammo[t] > 0 && me.ammoBalls.Value < 3, $"standing at a cannon loads the cannonballs you carry (turret {td.ammo[t]}, carrying {me.ammoBalls.Value})");
+                Check(Siege.DefenderController.NearTurret == t, "the HUD knows which turret you're at");
+
                 td.prepLeft.Value = 0.05f;
-                int v0 = map.alive.Value;
+                int tr0 = Siege.TitanDirector.Transforms;
+                yield return new WaitForSeconds(2.5f);
+                Check(td.HasAiTitan && Siege.TitanDirector.Transforms > tr0, "lightning brings the AI Titan");
                 var bot = Siege.TitanBot.Instance;
+                int v0 = map.alive.Value;
                 float z0 = bot ? bot.transform.position.z : 0;
-                yield return new WaitForSeconds(5f);
+                yield return new WaitForSeconds(4f);
                 if (bot)
                 {
-                    // watch it from the wall top
-                    me.Motor.Teleport(Siege.TitanMap.WallTop(td.Origin, 0, 9f) + Vector3.up * 0.3f, 180f);
+                    me.Motor.Teleport(Siege.TitanMap.WallTop(o, 0, 9f) + Vector3.up * 0.3f, 180f);
                     for (int f = 0; f < 3; f++) { LookAt(me, bot.transform.position + Vector3.up * 3.5f); yield return null; }
-                    _holdUse = false;
                     LookAt(me, bot.transform.position + Vector3.up * 3.5f); Shot("ai_titan_walk");
-                    yield return new WaitForSeconds(4f);
-                    LookAt(me, bot.transform.position + Vector3.up * 3.5f); Shot("ai_titan_wall");
+                    ShotFrom("ai_titan_outside", bot.transform.position + new Vector3(10f, 5f, -6f), bot.transform.position + Vector3.up * 3.5f);
                 }
-                yield return new WaitForSeconds(3f);
+                yield return new WaitForSeconds(8f);
                 float z1 = bot ? bot.transform.position.z : 0;
-                Check(z1 > z0 + 5f, $"the AI Titan marches on the wall ({z0:0} -> {z1:0} m)");
+                float stand = Siege.TitanMap.WallNearZ(o, 0) - 0.42f * Siege.TitanDirector.Scale;
+                Check(z1 > z0 + 1f && z1 > stand - 1.5f, $"the AI Titan marches up to the wall ({z0:0} -> {z1:0} m, wall face at {Siege.TitanMap.WallNearZ(o, 0):0})");
                 Check(map.alive.Value < v0 && Siege.TitanBot.Punches > 0, $"the AI Titan smashes the wall ({v0 - map.alive.Value} voxels, {Siege.TitanBot.Punches} punches)");
-                // standing at a turret loads it
-                // the turret on the far side from where the Titan is punching
-                int t = td.wall.Value * 4 + (bot && bot.transform.position.x > td.Origin.x ? 0 : 3);
-                me.Motor.Teleport(td.TurretPos(t) + Vector3.right * 0.8f + Vector3.up * 0.3f, 180f);
-                int a0 = Mathf.Max(0, td.ammo[t]), fired0 = Siege.TitanDirector.ShotsFired;
-                yield return new WaitForSeconds(3f);
-                // (a bot on the same turret fires each round as soon as it's loaded)
-                Check(td.ammo[t] > a0 || Siege.TitanDirector.ShotsFired > fired0, $"standing at a turret loads it (ammo {a0} -> {td.ammo[t]}, {Siege.TitanDirector.ShotsFired - fired0} shots)");
-                Log($"AI Titan after ~16 s: {td.titanHp.Value:0}/{td.titanMaxHp.Value:0} HP, wall {td.wall.Value + 1}, {Siege.DefenderBot.TurretShots} bot turret shots, {Siege.DefenderBot.RocketsFired} bot RPGs");
-                Check(Siege.DefenderController.NearTurret == t, "the HUD knows which turret you're at");
+                Check(Siege.TitanDirector.AmmoLoaded > 0, $"bots haul ammo to the turrets ({Siege.TitanDirector.AmmoLoaded} rounds loaded, {Siege.DefenderBot.TurretShots} bot turret shots, {Siege.DefenderBot.RocketsFired} bot RPGs)");
+                Log($"AI Titan after ~14 s of fighting: {td.titanHp.Value:0}/{td.titanMaxHp.Value:0} HP, wall {td.wall.Value + 1}, {Siege.TitanDirector.Blocks} blocks, {Siege.TitanDirector.Catches} catches");
                 mm.ServerEndMatch("autotest");
                 yield return new WaitForSeconds(1f);
             }

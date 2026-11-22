@@ -19,6 +19,8 @@ namespace Cubestruction.Siege
         public readonly NetworkVariable<int> action = new NetworkVariable<int>();
 
         public TitanBody Body { get; private set; }
+        /// <summary>When a rocket reaches its hand: catch it about a third of the time (else it blocks).</summary>
+        public bool WantsCatch => Random.value < 0.35f;
         public Vector3 Velocity { get; private set; }
 
         CharacterController _cc;
@@ -86,13 +88,14 @@ namespace Cubestruction.Siege
             float standZ = TitanMap.WallNearZ(o, w) - 0.42f * s;
             var goal = new Vector3(o.x + _laneX, transform.position.y, standZ);
             var to = goal - transform.position; to.y = 0;
-            bool atWall = to.magnitude < 0.6f;
-            var fwd = atWall ? Vector3.forward : to.normalized;
+            // at the wall once it's (nearly) up to its punching spot; it never turns back to fix a small overshoot
+            bool atWall = transform.position.z >= standZ - 0.8f;
+            var fwd = atWall ? Vector3.forward : (to + Vector3.forward * 2f).normalized;
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(fwd), dt * 3f);
 
             if (!atWall)
             {
-                float speed = (to.magnitude > 14f ? 8f : 5f);
+                float speed = (to.magnitude > 14f ? 8f : 5f) * (1f + 0.25f * d.rage.Value);   // rage: faster
                 var before = transform.position;
                 _cc.Move((fwd * speed + Vector3.up * _vy) * dt);
                 var moved = transform.position - before; moved.y = 0;
@@ -110,7 +113,7 @@ namespace Cubestruction.Siege
 
             if ((atWall || _blocked > 0.5f) && Time.time >= _attackAt)
             {
-                _attackAt = Time.time + 0.55f;
+                _attackAt = Time.time + 0.55f / (1f + 0.3f * d.rage.Value);
                 _punchHand ^= 1;
                 // aim high, middle and low in turn so the hole grows to the Titan's size
                 float h = new[] { 0.62f, 0.4f, 0.2f }[Random.Range(0, 3)];
@@ -157,6 +160,21 @@ namespace Cubestruction.Siege
                 var hit = new Vector3(_punchHand == 0 ? -0.12f : 0.12f, 0.6f, 0.62f);
                 if (_punchHand == 0) l = Vector3.Lerp(l, hit, k); else r = Vector3.Lerp(r, hit, k);
                 if (_punchT >= 1f) _punchT = -1;
+            }
+            // a hand comes up to meet an incoming rocket (block it, or catch it)
+            float s = transform.localScale.x;
+            Tools.ExplosiveProjectile threat = null; float best = 14f;
+            foreach (var e in Tools.ExplosiveProjectile.Live)
+            {
+                if (e == null || e.IsHeld || e.Def == null || e.Def.id != "RocketLauncher") continue;
+                float dd = Vector3.Distance(e.transform.position, transform.position + Vector3.up * 0.6f * s);
+                if (dd < best && Vector3.Dot(e.transform.position - transform.position, transform.forward) > 0) { best = dd; threat = e; }
+            }
+            if (threat != null && _punchT < 0)
+            {
+                var local = transform.InverseTransformPoint(threat.transform.position);
+                var reach = Vector3.ClampMagnitude(local - new Vector3(0, 0.62f, 0), 0.32f) + new Vector3(0, 0.62f, 0);
+                if (local.x >= 0) r = Vector3.Lerp(r, reach, 0.85f); else l = Vector3.Lerp(l, reach, 0.85f);
             }
             _left.localPosition = l; _right.localPosition = r;
             _head.localRotation = Quaternion.identity;

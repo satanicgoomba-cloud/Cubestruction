@@ -50,7 +50,7 @@ namespace Cubestruction.Siege
             if (near && use && !_useWas)
             {
                 if (d.ammo[NearTurret] > 0) { d.FireTurretRpc(NearTurret); TurretShotsRequested++; }
-                else UI.GameMenus.Instance?.Toast("Empty! Stay next to it to load.", AeroPalette.Danger);
+                else UI.GameMenus.Instance?.Toast("Empty! Dig the mine wall behind you for ammo, then stand here to load it.", AeroPalette.Danger);
             }
             _useWas = use;
         }
@@ -62,9 +62,11 @@ namespace Cubestruction.Siege
             if (d == null || NearTurret < 0 || NearTurret >= d.ammo.Count) return null;
             var k = d.KindOf(NearTurret);
             int a = d.ammo[NearTurret], cap = TitanDirector.Capacity(k);
-            return a >= cap ? $"{TitanDirector.Name(k)} loaded {a}/{cap}: Use to fire!"
-                 : a > 0 ? $"{TitanDirector.Name(k)} {a}/{cap} (loading...): Use to fire"
-                 : $"{TitanDirector.Name(k)}: loading...";
+            var me = PlayerAvatar.Local;
+            bool rocket = k == TitanDirector.TurretKind.Rocket;
+            int carry = me ? (rocket ? me.ammoRockets.Value : me.ammoBalls.Value) : 0;
+            string load = a < cap && carry > 0 ? " (loading yours...)" : a < cap ? $" (bring {(rocket ? "rockets" : "cannonballs")} from the mine wall)" : "";
+            return $"{TitanDirector.Name(k)} {a}/{cap}{load}" + (a > 0 ? ": Use to fire!" : "");
         }
     }
 }

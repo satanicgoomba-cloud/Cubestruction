@@ -44,6 +44,9 @@ namespace Cubestruction.Player
         public readonly NetworkVariable<int> voxels = new NetworkVariable<int>();
         public readonly NetworkVariable<ulong> ownedTools = new NetworkVariable<ulong>();
         public NetworkList<int> charges;
+        /// <summary>Titan Siege: cannonballs and rockets dug out of the mine wall (carried to turrets / fired by the RPG).</summary>
+        public readonly NetworkVariable<int> ammoBalls = new NetworkVariable<int>();
+        public readonly NetworkVariable<int> ammoRockets = new NetworkVariable<int>();
 
         public PlayerMotor Motor { get; private set; }
         public ToolController Tools { get; private set; }
@@ -107,7 +110,8 @@ namespace Cubestruction.Player
             if (cmd) cmd.enabled = r == PlayerRole.Commander;
             if (titan) titan.enabled = r == PlayerRole.Titan;
             if (def) def.enabled = r == PlayerRole.Defender;
-            Motor.WorldScale = r == PlayerRole.God ? Balance.Siege.god.scale : r == PlayerRole.Titan ? Siege.TitanDirector.Scale : 1f;
+            // (the Titan starts Buddy-sized; TitanController grows it when it bites its hand)
+            Motor.WorldScale = r == PlayerRole.God ? Balance.Siege.god.scale : 1f;
         }
 
         // ------------------------------------------------------------------ inventory helpers
@@ -178,6 +182,9 @@ namespace Cubestruction.Player
             Motor.Velocity = new Vector3(v.x, Mathf.Max(v.y, 0f), v.z);
             Motor.AddImpulse(velocity);
         }
+
+        [Rpc(SendTo.Owner)]
+        public void ToastRpc(string msg) => UI.GameMenus.Instance?.Toast(msg, AeroPalette.Gold);
 
         /// <summary>Server -> owner: the God picked you up. You dangle from its hand until it lets go.</summary>
         [Rpc(SendTo.Owner)]

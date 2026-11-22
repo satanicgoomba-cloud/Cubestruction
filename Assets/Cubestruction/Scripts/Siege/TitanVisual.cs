@@ -91,8 +91,26 @@ namespace Cubestruction.Siege
             Built++;
         }
 
+        Transform _nape;
+        float _steamAt;
+
+        /// <summary>The weak spot: a glowing patch on the back of the neck, where shots do triple damage.</summary>
+        void EnsureNape()
+        {
+            if (_nape) return;
+            var g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Destroy(g.GetComponent<Collider>());
+            g.name = "Nape";
+            var mr = g.GetComponent<MeshRenderer>();
+            if (Tools.FxHub.Instance) mr.sharedMaterial = Tools.FxHub.Instance.glowMaterial;
+            var b = new MaterialPropertyBlock(); b.SetColor("_BaseColor", new Color(1f, 0.3f, 0.15f, 0.85f)); mr.SetPropertyBlock(b);
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _nape = g.transform;
+        }
+
         void OnDestroy()
         {
+            if (_nape) Destroy(_nape.gameObject);
             if (_model) Destroy(_model.gameObject);
         }
 
@@ -174,6 +192,25 @@ namespace Cubestruction.Siege
                 var headRot = _yaw * Quaternion.Euler(pitch, yawD, 0);
                 if (_neck != null) _neck.t.rotation = Quaternion.Slerp(yawFix, headRot, 0.4f) * _neck.rel;
                 _head.t.rotation = headRot * _head.rel;
+            }
+
+            // nape marker (same spot the server checks), pulsing
+            EnsureNape();
+            float sc = root.localScale.x;
+            var fwd = Vector3.ProjectOnPlane(_headT.forward, Vector3.up);
+            fwd = fwd.sqrMagnitude > 0.01f ? fwd.normalized : _yaw * Vector3.forward;
+            _nape.position = _headT.position - fwd * 0.11f * sc - Vector3.up * 0.13f * sc;
+            _nape.rotation = Quaternion.LookRotation(-fwd);
+            _nape.localScale = new Vector3(0.16f, 0.1f, 0.04f) * sc * (1f + 0.12f * Mathf.Sin(Time.time * 6f));
+
+            // rage: steam pours off the body
+            var td = TitanDirector.Instance;
+            int rage = td ? td.rage.Value : 0;
+            if (rage > 0 && Time.time >= _steamAt && Tools.FxHub.Instance)
+            {
+                _steamAt = Time.time + (rage == 2 ? 0.08f : 0.2f);
+                var p = root.position + Vector3.up * Random.Range(0.3f, 0.9f) * _height + Random.insideUnitSphere * 0.15f * _height;
+                Tools.FxHub.Instance.LocalBlast(p, Random.Range(0.6f, 1.4f) * sc * 0.25f, new Color(1f, 1f, 1f, 0.35f));
             }
         }
 

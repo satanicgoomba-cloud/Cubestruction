@@ -80,9 +80,10 @@ namespace Cubestruction.Player
             // giants swap the Buddy body for their own: the Titan model, or the God's sun with hands
             var role = _avatar.role.Value;
             // tear down first, then build: the visuals' own clean-up runs late (end of frame)
-            if (role != PlayerRole.Titan && _titan != null) { Destroy(_titan); _titan = null; }
+            bool titanForm = role == PlayerRole.Titan && Siege.TitanDirector.Instance != null && Siege.TitanDirector.Instance.transformed.Value;
+            if (!titanForm && _titan != null) { Destroy(_titan); _titan = null; }
             if (role != PlayerRole.God && _sun != null) { Destroy(_sun); _sun = null; }
-            if (role == PlayerRole.Titan && _titan == null) { _titan = gameObject.AddComponent<Siege.TitanVisual>(); _titan.Init(_avatar); }
+            if (titanForm && _titan == null) { _titan = gameObject.AddComponent<Siege.TitanVisual>(); _titan.Init(_avatar); }
             if (role == PlayerRole.God && _sun == null) { _sun = gameObject.AddComponent<Siege.SunGodVisual>(); _sun.Init(_avatar); }
             bool giant = (_titan != null && _titan.HasModel) || _sun != null;
             SetBuddyVisible(!giant);
