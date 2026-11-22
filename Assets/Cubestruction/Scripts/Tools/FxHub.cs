@@ -26,6 +26,7 @@ namespace Cubestruction.Tools
             _bullets.material = glowMaterial;
         }
 
+        public bool TakeKunai(ulong owner, out Vector3 to) { to = default; return _bullets && _bullets.TakeKunai(owner, out to); }
         public int LiveBullets => _bullets ? _bullets.LiveCount : 0;
 
         /// <summary>Fires a volley on this peer. <paramref name="authority"/> = this copy damages voxels (server only).</summary>

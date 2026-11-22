@@ -91,7 +91,9 @@ namespace Cubestruction.Siege
             float ts = dir ? dir.UnitTimeScale : 1f;
             float dt = Time.fixedDeltaTime;
 
-            if (transform.position.y < -20f) { Die(true); return; }
+            // knocked off the edge of the arena (or thrown into the void): gone
+            float floor = cube != null ? cube.transform.position.y : 0f;
+            if (transform.position.y < floor - 3f) { Die(true); return; }
 
             switch (state.Value)
             {

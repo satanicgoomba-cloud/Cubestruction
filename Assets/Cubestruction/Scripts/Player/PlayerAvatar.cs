@@ -31,6 +31,10 @@ namespace Cubestruction.Player
         public readonly NetworkVariable<Platform> platform = new NetworkVariable<Platform>(Platform.Desktop, writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<FixedString32Bytes> displayName = new NetworkVariable<FixedString32Bytes>("Buddy", writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<byte> colorIndex = new NetworkVariable<byte>(0, writePerm: NetworkVariableWritePermission.Owner);
+        /// <summary>God hands: bit 0/1 left/right grip, bit 2/3 left/right trigger (curls the fingers for everyone).</summary>
+        public readonly NetworkVariable<byte> handPose = new NetworkVariable<byte>(0, writePerm: NetworkVariableWritePermission.Owner);
+        /// <summary>God Siege lobby vote for non-VR players: 0 = Raider (on foot), 1 = Minion Caster.</summary>
+        public readonly NetworkVariable<byte> siegeVote = new NetworkVariable<byte>(0, writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<float> avatarScale = new NetworkVariable<float>(1f, writePerm: NetworkVariableWritePermission.Owner);
 
         // server-written game state
@@ -97,9 +101,13 @@ namespace Cubestruction.Player
             if (!IsOwner) return;
             var god = GetComponent<Siege.GodController>();
             var cmd = GetComponent<Siege.CommanderController>();
+            var titan = GetComponent<Siege.TitanController>();
+            var def = GetComponent<Siege.DefenderController>();
             if (god) god.enabled = r == PlayerRole.God;
             if (cmd) cmd.enabled = r == PlayerRole.Commander;
-            Motor.WorldScale = r == PlayerRole.God ? Balance.Siege.god.scale : 1f;
+            if (titan) titan.enabled = r == PlayerRole.Titan;
+            if (def) def.enabled = r == PlayerRole.Defender;
+            Motor.WorldScale = r == PlayerRole.God ? Balance.Siege.god.scale : r == PlayerRole.Titan ? Siege.TitanDirector.Scale : 1f;
         }
 
         // ------------------------------------------------------------------ inventory helpers
@@ -134,7 +142,7 @@ namespace Cubestruction.Player
         public void BuyRpc(int toolIndex)
         {
             var t = Balance.Tool(toolIndex);
-            if (t == null || role.Value != PlayerRole.Miner) return;
+            if (t == null || !Roles.CanShop(role.Value)) return;
             if (!t.consumable && Owns(toolIndex)) return;
             if (money.Value < t.price) return;
             money.Value -= t.price;
@@ -171,10 +179,34 @@ namespace Cubestruction.Player
             Motor.AddImpulse(velocity);
         }
 
+        /// <summary>Server -> owner: the God picked you up. You dangle from its hand until it lets go.</summary>
+        [Rpc(SendTo.Owner)]
+        public void HeldRpc(ulong godClient, bool left)
+        {
+            if (!ByClient.TryGetValue(godClient, out var god)) return;
+            Ragdoll.Recover(true);
+            Motor.StopGrapple();
+            Motor.heldBy = left ? god.leftHand : god.rightHand;
+            Motor.heldOffset = Vector3.down * (0.08f * god.Motor.WorldScale + 0.6f);
+            UI.GameMenus.Instance?.Toast("The God grabbed you!", AeroPalette.Danger);
+        }
+
+        /// <summary>Server -> owner: dropped or thrown. A real throw ragdolls you.</summary>
+        [Rpc(SendTo.Owner)]
+        public void ReleasedRpc(Vector3 velocity)
+        {
+            if (Motor.heldBy == null) return;
+            Motor.heldBy = null;
+            Motor.Teleport(transform.position, transform.eulerAngles.y);
+            if (velocity.magnitude > 4f && GameSettings.AllowRagdoll) Ragdoll.Begin(velocity);
+            else Motor.AddImpulse(velocity);
+        }
+
         /// <summary>Server -> owner: explosion knockback. Big hits ragdoll the player.</summary>
         [Rpc(SendTo.Owner)]
         public void KnockbackRpc(Vector3 velocity)
         {
+            if (Motor.heldBy != null) return;   // in the God's fist: nothing else moves you
             float threshold = Balance.ToolsFile.ragdollThreshold;
             if (velocity.magnitude >= threshold && GameSettings.AllowRagdoll) Ragdoll.Begin(velocity);
             else Motor.AddImpulse(velocity);

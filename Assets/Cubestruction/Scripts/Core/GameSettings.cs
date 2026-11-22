@@ -2,10 +2,22 @@ using UnityEngine;
 
 namespace Cubestruction
 {
-    public enum GameMode : byte { Mining = 0, GodSiege = 1 }
+    public enum GameMode : byte { Mining = 0, GodSiege = 1, TitanSiege = 2 }
     public enum MatchState : byte { Lobby = 0, Playing = 1, Ended = 2 }
     public enum Platform : byte { Desktop = 0, Mobile = 1, VR = 2 }
-    public enum PlayerRole : byte { Miner = 0, God = 1, Commander = 2 }
+    /// <summary>Miner: Mining. God / Commander (minion caster) / Raider (on-foot attacker): God Siege.
+    /// Titan / Defender: Titan Siege.</summary>
+    public enum PlayerRole : byte { Miner = 0, God = 1, Commander = 2, Raider = 3, Titan = 4, Defender = 5 }
+
+    public static class Roles
+    {
+        /// <summary>Roles that run around with tools (hotbar, swing, HUD, mobile controls).</summary>
+        public static bool UsesTools(PlayerRole r) => r == PlayerRole.Miner || r == PlayerRole.Raider || r == PlayerRole.Defender;
+        /// <summary>Roles that can buy from the shop.</summary>
+        public static bool CanShop(PlayerRole r) => r == PlayerRole.Miner || r == PlayerRole.Raider;
+        /// <summary>Giants that explosions and pads don't push around.</summary>
+        public static bool IsGiant(PlayerRole r) => r == PlayerRole.God || r == PlayerRole.Titan;
+    }
 
     /// <summary>VR movement options (all of them also allow climbing with grip).</summary>
     public enum VRLocomotion : byte { Smooth = 0, Teleport = 1, ArmSwing = 2 }
@@ -25,6 +37,10 @@ namespace Cubestruction
         public static string PlayerName { get => PlayerPrefs.GetString("name", "Buddy" + Random.Range(100, 999)); set => PlayerPrefs.SetString("name", value); }
         public static int ColorIndex { get => PlayerPrefs.GetInt("color", Random.Range(0, AeroPalette.BuddyColors.Length)); set => PlayerPrefs.SetInt("color", value); }
         /// <summary>Allow explosions to ragdoll you (VR players prone to motion sickness can turn this off; they still get knockback).</summary>
+        /// <summary>Tool ids the player pinned to the hotbar (comma separated). Used once more than
+        /// <see cref="HotbarMax"/> tools are usable: pinned ones first, then the rest in shop order.</summary>
+        public static string HotbarPins { get => PlayerPrefs.GetString("hotbarPins", ""); set => PlayerPrefs.SetString("hotbarPins", value); }
+        public const int HotbarMax = 16, HotbarRow = 8;
         public static bool AllowRagdoll { get => PlayerPrefs.GetInt("ragdoll", 1) == 1; set => PlayerPrefs.SetInt("ragdoll", value ? 1 : 0); }
     }
 

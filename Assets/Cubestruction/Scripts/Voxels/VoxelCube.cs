@@ -26,6 +26,8 @@ namespace Cubestruction.Voxels
         public readonly NetworkVariable<float> valueScale = new NetworkVariable<float>(1f);
         public readonly NetworkVariable<int> alive = new NetworkVariable<int>();
         public readonly NetworkVariable<int> coreAlive = new NetworkVariable<int>();
+        /// <summary>0 = full layered cube; 1 = Titan Siege walls + town (see TitanMap).</summary>
+        public readonly NetworkVariable<byte> shapeMode = new NetworkVariable<byte>(0);
 
         public VoxelGrid Grid { get; private set; }
         public int Total => Grid == null ? 1 : Grid.N * Grid.N * Grid.N;
@@ -34,6 +36,8 @@ namespace Cubestruction.Voxels
         public event Action<int, ulong, int> OnCellsDestroyedServer;
         /// <summary>Server hook used by God Siege shields: return true to protect a cell.</summary>
         public Func<int, bool> DamageFilter;
+        /// <summary>Server hook (Titan Siege): return false to ignore damage from this instigator.</summary>
+        public Func<ulong, bool> InstigatorFilter;
         /// <summary>All machines: fired when cells disappear (for VFX/audio).</summary>
         public event Action<List<int>> OnCellsRemoved;
 
@@ -68,9 +72,11 @@ namespace Cubestruction.Voxels
         // ------------------------------------------------------------------ lifecycle
 
         /// <summary>Server: configure before spawning.</summary>
-        public void ServerConfigure(int n, int players)
+        public void ServerConfigure(int n, int players, byte shape = 0, float cell = 0.25f)
         {
             size.Value = n;
+            shapeMode.Value = shape;
+            cellSize = cell;
             players = Mathf.Max(1, players);
             hpScale.Value = Mathf.Pow(players, Balance.Layers.coopHpExponent);
             valueScale.Value = Mathf.Pow(players, Balance.Layers.coopValueExponent);
@@ -96,7 +102,8 @@ namespace Cubestruction.Voxels
         void Build()
         {
             int n = size.Value;
-            Grid = new VoxelGrid(n, hpScale.Value);
+            if (shapeMode.Value == 1) cellSize = Siege.TitanMap.CellSize;
+            Grid = new VoxelGrid(n, hpScale.Value, shapeMode.Value == 1 ? Siege.TitanMap.Shape(n) : null);
             float extent = n * cellSize;
             // local origin = bottom centre
             _chunkCount = Mathf.CeilToInt(n / (float)ChunkSize);
@@ -140,6 +147,8 @@ namespace Cubestruction.Voxels
 
         public Vector3 Center => transform.TransformPoint(new Vector3(0, Grid.N * cellSize * 0.5f, 0));
         public float HalfExtent => Grid.N * cellSize * 0.5f;
+        /// <summary>World height of the top of the map as built (the cube's top; lower for shaped maps).</summary>
+        public float ContentTopY => transform.position.y + (Grid != null ? Grid.ContentTop : 0) * cellSize;
         /// <summary>Server: duration of the last floating-island flood fill (perf diagnostics).</summary>
         public static float LastIslandCheckMs;
         /// <summary>Server: voxels destroyed so far this session (the Sun Orb grows with teamwork).</summary>
@@ -202,7 +211,7 @@ namespace Cubestruction.Voxels
         /// <summary>Server only. Damage voxels in a sphere around a world point. Returns money awarded.</summary>
         public int ServerDamage(Vector3 worldPos, float radiusCells, float damage, int tier, bool explosive, ulong instigator)
         {
-            if (!IsServer || Grid == null) return 0;
+            if (!IsServer || Grid == null || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
             _killed.Clear();
             Grid.ApplySphere(WorldToCell(worldPos), radiusCells, damage, tier, explosive, _killed, DamageFilter);
             return FinishKills(instigator);
@@ -211,7 +220,7 @@ namespace Cubestruction.Voxels
         /// <summary>Server only. Ray through the grid, damaging up to `pierce` cells (railgun) or the first hit.</summary>
         public int ServerDamageRay(Ray worldRay, float range, float radiusCells, float damage, int tier, int pierce, ulong instigator)
         {
-            if (!IsServer || !Raycast(worldRay, range, out var cell, out var point)) return 0;
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out var point) || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
             _killed.Clear();
             var dir = transform.InverseTransformDirection(worldRay.direction).normalized;
             var start = new Vector3(cell.x, cell.y, cell.z);
@@ -324,7 +333,7 @@ namespace Cubestruction.Voxels
         /// exposed voxels within range. Appends the bolt's world points to <paramref name="path"/>.</summary>
         public int ServerChain(Ray worldRay, float range, ToolDef t, ulong instigator, List<Vector3> path)
         {
-            if (!IsServer || !Raycast(worldRay, range, out var cell, out var p)) return 0;
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out var p) || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
             path.Add(p);
             _killed.Clear();
             var hit = new HashSet<int>();
@@ -380,7 +389,7 @@ namespace Cubestruction.Voxels
         /// <summary>Aqua Surge: carve a straight tunnel (spheres every ~0.75 radius along the ray).</summary>
         public int ServerCarveBeam(Vector3 originWorld, Vector3 dirWorld, float lengthM, float radiusCells, float damage, int tier, ulong instigator)
         {
-            if (!IsServer) return 0;
+            if (!IsServer || (InstigatorFilter != null && !InstigatorFilter(instigator))) return 0;
             _killed.Clear();
             var o = WorldToCell(originWorld);
             var d = transform.InverseTransformDirection(dirWorld).normalized;

@@ -44,10 +44,13 @@ namespace Cubestruction.Player
             _motor = GetComponent<PlayerMotor>();
 
             _avatar.headAnchor.localPosition = new Vector3(0, eyeHeight, 0);
-            _avatar.rightHand.localPosition = new Vector3(0.28f, eyeHeight - 0.25f, 0.45f);
-            _avatar.leftHand.localPosition = new Vector3(-0.28f, eyeHeight - 0.25f, 0.45f);
-            _avatar.rightHand.SetParent(_avatar.headAnchor, true);  // view-model: hands follow the camera pitch
-            _avatar.leftHand.SetParent(_avatar.headAnchor, true);
+            // view-model: hands follow the camera pitch. Set relative to the head every time: this runs again
+            // after a killstreak view (Raptor / Heli) hands control back, and the hands are already under the head
+            _avatar.rightHand.SetParent(_avatar.headAnchor, false);
+            _avatar.leftHand.SetParent(_avatar.headAnchor, false);
+            _avatar.rightHand.localPosition = new Vector3(0.28f, -0.25f, 0.45f);
+            _avatar.leftHand.localPosition = new Vector3(-0.28f, -0.25f, 0.45f);
+            _avatar.rightHand.localRotation = _avatar.leftHand.localRotation = Quaternion.identity;
 
             var camGo = new GameObject("Flat Camera");
             camGo.transform.SetParent(_avatar.headAnchor, false);

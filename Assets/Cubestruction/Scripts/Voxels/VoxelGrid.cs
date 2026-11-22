@@ -22,7 +22,12 @@ namespace Cubestruction.Voxels
         public readonly int CoreLayer;
         readonly float hpScale;
 
-        public VoxelGrid(int n, float hpScale = 1f)
+        /// <summary>Highest solid row + 1 at build time (cells). A full cube is N; shaped maps are lower.</summary>
+        public readonly int ContentTop;
+
+        /// <param name="shape">Optional map: returns the layer index of cell (x, y, z), or -1 for empty.
+        /// Without it the grid is a full cube layered by depth (Mining / God Siege).</param>
+        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null)
         {
             N = n;
             this.hpScale = hpScale;
@@ -33,22 +38,36 @@ namespace Cubestruction.Voxels
             var L = Balance.Layers.layers;
             CoreLayer = L.Length - 1;
             float half = n / 2f;
+            int alive = 0, top = 0;
             for (int x = 0; x < n; x++)
             for (int y = 0; y < n; y++)
             for (int z = 0; z < n; z++)
             {
-                int d = Mathf.Min(Mathf.Min(D(x), D(y)), D(z));
-                float frac = d / half;
-                int li = L.Length - 1;
-                for (int i = 0; i < L.Length; i++) if (frac < L[i].maxDepthFraction) { li = i; break; }
+                int li;
+                if (shape != null)
+                {
+                    li = shape(x, y, z);
+                    if (li < 0) { hp[Index(x, y, z)] = -1f; continue; }
+                    li = Mathf.Min(li, L.Length - 1);
+                }
+                else
+                {
+                    int d = Mathf.Min(Mathf.Min(D(x), D(y)), D(z));
+                    float frac = d / half;
+                    li = L.Length - 1;
+                    for (int i = 0; i < L.Length; i++) if (frac < L[i].maxDepthFraction) { li = i; break; }
+                }
                 int idx = Index(x, y, z);
                 layer[idx] = (byte)li;
                 hp[idx] = L[li].hp * hpScale;
                 solid[idx] = true;
+                alive++;
+                if (y + 1 > top) top = y + 1;
                 if (li == CoreLayer) CoreTotal++;
             }
-            Alive = count;
+            Alive = alive;
             CoreAlive = CoreTotal;
+            ContentTop = top;
         }
 
         int D(int i) => Mathf.Min(i, N - 1 - i);
@@ -237,7 +256,7 @@ namespace Cubestruction.Voxels
         /// <summary>Restore a cell (God "Regrow" skill). Never restores Core.</summary>
         public bool Restore(int idx)
         {
-            if (solid[idx] || layer[idx] == CoreLayer) return false;
+            if (solid[idx] || layer[idx] == CoreLayer || hp[idx] < 0f) return false;   // hp < 0: never part of the map
             solid[idx] = true;
             hp[idx] = MaxHp(idx);
             Alive++;

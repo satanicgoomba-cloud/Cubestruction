@@ -17,6 +17,8 @@ namespace Cubestruction.Player
         Vector3 _lastPos;
         float _walkPhase;
         public bool Posing = true;   // false while ragdolled
+        Siege.TitanVisual _titan;
+        Siege.SunGodVisual _sun;
 
         public static readonly string[] PartNames = { "Head", "Torso", "ArmL", "ArmR", "LegL", "LegR" };
 
@@ -26,6 +28,28 @@ namespace Cubestruction.Player
             head = head ? head : Find("Head"); torso = torso ? torso : Find("Torso");
             armL = armL ? armL : Find("ArmL"); armR = armR ? armR : Find("ArmR");
             legL = legL ? legL : Find("LegL"); legR = legR ? legR : Find("LegR");
+        }
+
+        Renderer[] _buddyRenderers, _mittens;
+        bool _buddyShown = true;
+
+        /// <summary>The Buddy body and bubble mittens hide while a giant body (Titan / sun God) stands in.</summary>
+        void SetBuddyVisible(bool on)
+        {
+            if (_buddyRenderers == null)
+            {
+                _buddyRenderers = GetComponentsInChildren<Renderer>(true);
+                var m = new System.Collections.Generic.List<Renderer>();
+                foreach (var hand in new[] { _avatar.leftHand, _avatar.rightHand })
+                    foreach (var r in hand.GetComponentsInChildren<Renderer>(true))
+                        for (var t = r.transform; t != null && t != hand; t = t.parent)
+                            if (t.name.StartsWith("Mitten")) { m.Add(r); break; }
+                _mittens = m.ToArray();
+            }
+            if (on == _buddyShown) return;
+            _buddyShown = on;
+            foreach (var r in _buddyRenderers) if (r) r.enabled = on;
+            foreach (var r in _mittens) if (r) r.enabled = on;
         }
 
         Transform Find(string n)
@@ -52,7 +76,18 @@ namespace Cubestruction.Player
 
         void LateUpdate()
         {
-            if (_avatar == null || !Posing || torso == null) return;
+            if (_avatar == null) return;
+            // giants swap the Buddy body for their own: the Titan model, or the God's sun with hands
+            var role = _avatar.role.Value;
+            // tear down first, then build: the visuals' own clean-up runs late (end of frame)
+            if (role != PlayerRole.Titan && _titan != null) { Destroy(_titan); _titan = null; }
+            if (role != PlayerRole.God && _sun != null) { Destroy(_sun); _sun = null; }
+            if (role == PlayerRole.Titan && _titan == null) { _titan = gameObject.AddComponent<Siege.TitanVisual>(); _titan.Init(_avatar); }
+            if (role == PlayerRole.God && _sun == null) { _sun = gameObject.AddComponent<Siege.SunGodVisual>(); _sun.Init(_avatar); }
+            bool giant = (_titan != null && _titan.HasModel) || _sun != null;
+            SetBuddyVisible(!giant);
+            if (giant) return;
+            if (!Posing || torso == null) return;
             var root = _avatar.transform;
             float s = _avatar.avatarScale.Value * root.localScale.x;
             transform.localScale = Vector3.one * _avatar.avatarScale.Value;

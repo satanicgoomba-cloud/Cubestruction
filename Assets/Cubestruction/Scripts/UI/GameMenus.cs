@@ -29,11 +29,12 @@ namespace Cubestruction.UI
         public bool IsVR { get; private set; }
         public bool ShopOpen => _shopOpen;
         /// <summary>True while a menu needs the mouse/touch on a flat client (FlatRig stops moving/looking).</summary>
-        public bool BlocksGameplayInput => !IsVR && (_screen != Screen.Hud || _shopOpen || _pauseOpen || _settingsOpen);
+        public bool BlocksGameplayInput => !IsVR && (_screen != Screen.Hud || _shopOpen || _pauseOpen || _settingsOpen || _hotbarEditOpen);
 
         enum Screen { Main, Connecting, Lobby, Hud, End }
         Screen _screen = (Screen)(-1);
-        bool _shopOpen, _pauseOpen, _settingsOpen;
+        bool _shopOpen, _pauseOpen, _settingsOpen, _hotbarEditOpen;
+        RectTransform _hotbarEdit, _hotbarBack; RectTransform _pickGrid; Text _pickInfo; readonly List<Button> _pickButtons = new List<Button>(); long _pickSig = -1;
         GameMode _lobbyMode = GameMode.Mining;
 
         // canvases
@@ -45,7 +46,8 @@ namespace Cubestruction.UI
         // screens
         RectTransform _main, _connecting, _lobby, _hud, _shop, _end, _settings, _pause, _toasts, _sky;
         Text _status, _connectingText, _lobbyCode, _lobbyPlayers, _lobbyHint, _endTitle, _endStats;
-        Button _startBtn, _modeMining, _modeSiege, _endLobbyBtn;
+        Button _startBtn, _modeMining, _modeSiege, _modeTitan, _endLobbyBtn, _voteRaider, _voteCaster;
+        RectTransform _voteRow;
         InputField _nameField, _codeField, _ipField;
         Image[] _colorSwatches;
 
@@ -82,7 +84,7 @@ namespace Cubestruction.UI
 
         class HotbarSlot
         {
-            public RectTransform rt; public Image orb, ringR, ringL; public Text name, count, key; public Button btn;
+            public RectTransform rt; public Image orb, ringR, ringL, cool; public Text name, count, key, coolText; public Button btn; public int tool = -1;
         }
 
         class ShopCard
@@ -99,7 +101,7 @@ namespace Cubestruction.UI
             _forceMobile = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-mobileui") >= 0;
             EnsureEventSystem();
             BuildCanvases();
-            BuildMain(); BuildConnecting(); BuildLobby(); BuildHud(); BuildShop(); BuildEnd(); BuildSettings(); BuildPause();
+            BuildMain(); BuildConnecting(); BuildLobby(); BuildHud(); BuildShop(); BuildEnd(); BuildSettings(); BuildPause(); BuildHotbarEdit();
             _toasts = AeroTheme.Rect(_menuCanvas.transform, "Toasts").Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -90), new Vector2(900, 400), new Vector2(0.5f, 1));
             var tv = _toasts.gameObject.AddComponent<VerticalLayoutGroup>(); tv.spacing = 8; tv.childAlignment = TextAnchor.UpperCenter;
             tv.childControlHeight = true; tv.childControlWidth = true; tv.childForceExpandHeight = false;
@@ -130,7 +132,7 @@ namespace Cubestruction.UI
                 _menuAnchor = _menuCanvas.transform;
                 ((RectTransform)_menuCanvas.transform).sizeDelta = new Vector2(1600, 1000);
                 _menuCanvas.transform.localScale = Vector3.one * 0.0008f;
-                ((RectTransform)_hudCanvas.transform).sizeDelta = new Vector2(1100, 360);
+                ((RectTransform)_hudCanvas.transform).sizeDelta = new Vector2(1100, 500);
                 _hudCanvas.transform.localScale = Vector3.one * 0.00045f;
                 _pointer = gameObject.AddComponent<VRPointer>();
                 _pointer.canvas = _menuCanvas;
@@ -258,7 +260,7 @@ namespace Cubestruction.UI
 
         void BuildLobby()
         {
-            _lobby = Screen_("Lobby", new Vector2(1100, 880));
+            _lobby = Screen_("Lobby", new Vector2(1100, 960));
             var col = Column(_lobby);
             Title(col, "Lobby", 56);
             _lobbyCode = AeroTheme.Label(col, "", 44, TextAnchor.MiddleCenter, AeroPalette.SkyDeep); _lobbyCode.fontStyle = FontStyle.Bold; _lobbyCode.Size(64);
@@ -270,6 +272,12 @@ namespace Cubestruction.UI
             var modeRow = AeroTheme.HRow(col, "Modes"); modeRow.Size(70);
             _modeMining = AeroTheme.Button(modeRow.transform, "Mining", () => _lobbyMode = GameMode.Mining, AeroPalette.Lime);
             _modeSiege = AeroTheme.Button(modeRow.transform, "God Siege", () => _lobbyMode = GameMode.GodSiege, AeroPalette.SkyDeep);
+            _modeTitan = AeroTheme.Button(modeRow.transform, "Titan Siege", () => _lobbyMode = GameMode.TitanSiege, AeroPalette.Danger);
+            var vote = AeroTheme.HRow(col, "Vote"); vote.Size(60);
+            _voteRow = (RectTransform)vote.transform;
+            AeroTheme.Label(vote.transform, "God Siege, I'll play as:", 22);
+            _voteRaider = AeroTheme.Button(vote.transform, "Raider", () => { if (PlayerAvatar.Local) PlayerAvatar.Local.siegeVote.Value = 0; }, AeroPalette.Lime, 22);
+            _voteCaster = AeroTheme.Button(vote.transform, "Minion Caster", () => { if (PlayerAvatar.Local) PlayerAvatar.Local.siegeVote.Value = 1; }, AeroPalette.Gold, 22);
             _lobbyHint = AeroTheme.Label(col, "", 20); _lobbyHint.Size(64);
 
             var row = AeroTheme.HRow(col, "Actions"); row.Size(76);
@@ -322,11 +330,12 @@ namespace Cubestruction.UI
 
         void BuildPause()
         {
-            _pause = Screen_("Pause", new Vector2(600, 520));
+            _pause = Screen_("Pause", new Vector2(600, 610));
             var col = Column(_pause);
             Title(col, "Paused", 52);
             AeroTheme.Button(col, "Resume", () => _pauseOpen = false, AeroPalette.Lime).Size(70);
             AeroTheme.Button(col, "Settings", () => _settingsOpen = true, AeroPalette.SkyDeep).Size(70);
+            AeroTheme.Button(col, "Edit hotbar", () => { _hotbarEditOpen = true; _pickSig = -1; }, AeroPalette.Aqua).Size(70);
             AeroTheme.Button(col, "Leave game", () => { _pauseOpen = false; NetBootstrap.Instance?.Leave(); }, AeroPalette.Danger).Size(70);
         }
 
@@ -366,10 +375,12 @@ namespace Cubestruction.UI
                 var bar = AeroTheme.Panel(_hud, "HotbarBack");
                 bar.color = new Color(1, 1, 1, 0.55f);
                 bar.raycastTarget = false;   // only the slot orbs take taps/clicks
-                bar.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(1300, 150), new Vector2(0.5f, 0));
+                bar.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(1000, 150), new Vector2(0.5f, 0));
+                _hotbarBack = bar.rectTransform;
                 _hotbarRow = AeroTheme.Rect(bar.transform, "Row").Fill(10);
                 _toolInfo = AeroTheme.Label(_hud, "", 22, TextAnchor.MiddleCenter, Color.white);
-                _toolInfo.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 180), new Vector2(900, 34));
+                _toolInfo.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, 40), new Vector2(900, 34), new Vector2(0.5f, 0));
+                _toolInfo.transform.SetParent(bar.transform, false);
                 _toolInfo.gameObject.AddComponent<Outline>().effectColor = new Color(0.05f, 0.3f, 0.6f, 0.8f);
             }
             else
@@ -384,13 +395,15 @@ namespace Cubestruction.UI
                 _timerText = AeroTheme.Label(info.transform, "0:00", 36, TextAnchor.MiddleRight);
                 _voxelBar = AeroTheme.Bar(back.transform, "Voxels", AeroPalette.Lime);
                 ((RectTransform)_voxelBar.transform.parent).Place(new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -84), new Vector2(-60, 20), new Vector2(0.5f, 1));
-                _hotbarRow = AeroTheme.Rect(back.transform, "Row").Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 14), new Vector2(-30, 220), new Vector2(0.5f, 0));
+                _hotbarRow = AeroTheme.Rect(back.transform, "Row").Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 14), new Vector2(-30, 280), new Vector2(0.5f, 0));
                 _toolInfo = AeroTheme.Label(back.transform, "", 24);
-                _toolInfo.rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 236), new Vector2(-40, 30), new Vector2(0.5f, 0));
+                _toolInfo.rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 300), new Vector2(-40, 30), new Vector2(0.5f, 0));
             }
-            var row = _hotbarRow.gameObject.AddComponent<HorizontalLayoutGroup>();
-            row.spacing = 10; row.childAlignment = TextAnchor.MiddleCenter;
-            row.childControlWidth = false; row.childControlHeight = false; row.childForceExpandWidth = false;
+            // 8 per row; past 8 the rows stack upward (the panel grows with them)
+            var row = _hotbarRow.gameObject.AddComponent<GridLayoutGroup>();
+            row.cellSize = new Vector2(110, 130); row.spacing = new Vector2(10, 8);
+            row.constraint = GridLayoutGroup.Constraint.FixedColumnCount; row.constraintCount = GameSettings.HotbarRow;
+            row.startCorner = GridLayoutGroup.Corner.LowerLeft; row.childAlignment = TextAnchor.LowerCenter;
 
             bool mobile = !IsVR && (Application.isMobilePlatform || _forceMobile);
             if (mobile)
@@ -423,6 +436,13 @@ namespace Cubestruction.UI
                 s.count = AeroTheme.Label(s.rt, "", 20, TextAnchor.LowerRight, Color.white, false);
                 s.count.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-6, -66), new Vector2(60, 30), new Vector2(1, 1));
                 s.count.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0.25f, 0.5f, 0.9f);
+                // cooldown: a dark sweep over the orb plus seconds left
+                s.cool = AeroTheme.Image(s.orb.transform, "Cooldown", AeroTheme.Orb, new Color(0.05f, 0.1f, 0.25f, 0.62f));
+                s.cool.rectTransform.Fill(); s.cool.raycastTarget = false;
+                s.cool.type = Image.Type.Filled; s.cool.fillMethod = Image.FillMethod.Radial360; s.cool.fillOrigin = 2; s.cool.fillClockwise = false; s.cool.fillAmount = 0;
+                s.coolText = AeroTheme.Label(s.orb.transform, "", 30, TextAnchor.MiddleCenter, Color.white, false);
+                s.coolText.rectTransform.Fill(); s.coolText.fontStyle = FontStyle.Bold; s.coolText.raycastTarget = false;
+                s.coolText.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0.2f, 0.45f, 1f);
                 s.key = AeroTheme.Label(s.rt, (idx + 1).ToString(), 18, TextAnchor.LowerCenter, AeroPalette.Ink, false);
                 s.key.rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), Vector2.zero, new Vector2(0, 28), new Vector2(0.5f, 0));
                 _slots.Add(s);
@@ -440,7 +460,16 @@ namespace Cubestruction.UI
 
         void RefreshHotbar(PlayerAvatar me)
         {
-            long sig = HotbarSignature(me);
+            // cooldowns every frame (cheap): why you can't swing again yet
+            foreach (var s in _slots)
+            {
+                if (!s.rt.gameObject.activeSelf || s.tool < 0) continue;
+                float f = me.Tools.CooldownFrac(s.tool, out float left);
+                s.cool.fillAmount = f;
+                s.coolText.text = left >= 0.3f ? left.ToString(left < 1f ? "0.0" : "0") : "";
+                s.name.enabled = f <= 0;
+            }
+            long sig = HotbarSignature(me) * 7 + GameSettings.HotbarPins.GetHashCode();
             if (sig == _hotbarSig) return;
             _hotbarSig = sig;
             var bar = me.Tools.Hotbar();
@@ -450,6 +479,7 @@ namespace Cubestruction.UI
                 if (i >= bar.Count) { _slots[i].rt.gameObject.SetActive(false); continue; }
                 var s = GetSlot(i); var t = bar[i];
                 s.rt.gameObject.SetActive(true);
+                s.tool = t.index;
                 s.name.text = ShortName(t.name);
                 s.count.text = t.consumable ? "x" + me.Charges(t.index) : "";
                 bool selR = t.index == r, selL = IsVR && t.index == l;
@@ -458,6 +488,8 @@ namespace Cubestruction.UI
                 s.rt.localScale = Vector3.one * (selR || selL ? 1.12f : 0.94f);
                 s.key.text = IsVR ? (selL && selR ? "L+R" : selL ? "L" : selR ? "R" : "") : (i < 9 ? (i + 1).ToString() : "");
             }
+            int rows = Mathf.Max(1, Mathf.CeilToInt(bar.Count / (float)GameSettings.HotbarRow));
+            if (_hotbarBack) _hotbarBack.sizeDelta = new Vector2(_hotbarBack.sizeDelta.x, 20 + rows * 138);
             var eq = me.Tools.Equipped(false);
             _toolInfo.text = eq == null ? "" : $"{eq.name}  ·  {eq.desc}";
         }
@@ -491,7 +523,63 @@ namespace Cubestruction.UI
             AeroTheme.Button(footer.transform, "◀ Prev", () => { _shopPageIdx = Mathf.Max(0, _shopPageIdx - 1); _shopSig = -1; }, AeroPalette.SkyDeep);
             _shopPage = AeroTheme.Label(footer.transform, "", 26);
             AeroTheme.Button(footer.transform, "Next ▶", () => { _shopPageIdx = Mathf.Min(PageCount - 1, _shopPageIdx + 1); _shopSig = -1; }, AeroPalette.SkyDeep);
+            AeroTheme.Button(footer.transform, "Hotbar", () => { _hotbarEditOpen = true; _pickSig = -1; }, AeroPalette.Aqua);
             AeroTheme.Button(footer.transform, "Close", () => _shopOpen = false, AeroPalette.Danger);
+        }
+
+        // ------------------------------------------------------------------ hotbar picker (pause menu / shop; works in VR)
+
+        void BuildHotbarEdit()
+        {
+            _hotbarEdit = Screen_("HotbarEdit", new Vector2(1400, 900));
+            var t = Title(_hotbarEdit, "Hotbar", 50);
+            t.rectTransform.Place(new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -20), new Vector2(-60, 70), new Vector2(0.5f, 1));
+            _pickInfo = AeroTheme.Label(_hotbarEdit, "", 22);
+            _pickInfo.rectTransform.Place(new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -96), new Vector2(-60, 60), new Vector2(0.5f, 1));
+            _pickGrid = AeroTheme.Rect(_hotbarEdit, "Grid").Place(new Vector2(0, 0), new Vector2(1, 1), new Vector2(0, -20), new Vector2(-60, -280));
+            var grid = _pickGrid.gameObject.AddComponent<GridLayoutGroup>();
+            grid.cellSize = new Vector2(250, 76); grid.spacing = new Vector2(12, 12);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 5;
+            grid.childAlignment = TextAnchor.UpperCenter;
+            var footer = AeroTheme.HRow(_hotbarEdit, "Footer");
+            ((RectTransform)footer.transform).Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 24), new Vector2(-500, 70), new Vector2(0.5f, 0));
+            AeroTheme.Button(footer.transform, "Clear picks", () => { GameSettings.HotbarPins = ""; _pickSig = -1; }, AeroPalette.SkyDeep);
+            AeroTheme.Button(footer.transform, "Done", () => _hotbarEditOpen = false, AeroPalette.Lime);
+            _hotbarEdit.gameObject.SetActive(false);
+        }
+
+        void RefreshHotbarEdit(PlayerAvatar me)
+        {
+            var usable = me.Tools.Usable();
+            var pins = new HashSet<string>(GameSettings.HotbarPins.Split(',').Where(x => x.Length > 0));
+            long sig = HotbarSignature(me) * 31 + GameSettings.HotbarPins.GetHashCode();
+            if (sig == _pickSig) return;
+            _pickSig = sig;
+            var shown = new HashSet<int>(me.Tools.Hotbar().Select(x => x.index));
+            _pickInfo.text = usable.Count > GameSettings.HotbarMax
+                ? $"You have {usable.Count} tools; the hotbar holds {GameSettings.HotbarMax} (two rows of {GameSettings.HotbarRow}). Tap to pin the ones you want ({pins.Count} pinned)."
+                : $"All {usable.Count} of your tools fit on the hotbar. Pins matter once you own more than {GameSettings.HotbarMax}.";
+            while (_pickButtons.Count < usable.Count) _pickButtons.Add(AeroTheme.Button(_pickGrid, "", null, AeroPalette.SkyDeep, 20));
+            for (int i = 0; i < _pickButtons.Count; i++)
+            {
+                var b = _pickButtons[i];
+                b.gameObject.SetActive(i < usable.Count);
+                if (i >= usable.Count) continue;
+                var tool = usable[i];
+                bool pinned = pins.Contains(tool.id), onBar = shown.Contains(tool.index);
+                b.SetLabel((pinned ? "★ " : onBar ? "✓ " : "") + tool.name);
+                b.image.color = pinned ? AeroPalette.Gold : onBar ? AeroPalette.Lime : new Color(0.75f, 0.82f, 0.9f);
+                b.onClick.RemoveAllListeners();
+                b.onClick.AddListener(() =>
+                {
+                    var p = new List<string>(GameSettings.HotbarPins.Split(',').Where(x => x.Length > 0));
+                    if (p.Contains(tool.id)) p.Remove(tool.id);
+                    else if (p.Count < GameSettings.HotbarMax) p.Add(tool.id);
+                    else { Toast($"The hotbar holds {GameSettings.HotbarMax}: unpin one first", AeroPalette.Danger); return; }
+                    GameSettings.HotbarPins = string.Join(",", p);
+                    _pickSig = -1;
+                });
+            }
         }
 
         int PageCount => Mathf.Max(1, Mathf.CeilToInt(_shopTools.Count / (float)CardsPerPage));
@@ -543,7 +631,7 @@ namespace Cubestruction.UI
                 c.desc.text = t.desc;
                 bool owned = !t.consumable && me.Owns(t.index);
                 c.state.text = owned ? "Owned ✓" : t.consumable ? $"Have {me.Charges(t.index)}" : "";
-                c.buy.interactable = !owned && me.money.Value >= t.price && me.role.Value == PlayerRole.Miner;
+                c.buy.interactable = !owned && me.money.Value >= t.price && Roles.CanShop(me.role.Value);
                 c.buy.SetLabel(owned ? "Owned" : AeroTheme.Money(t.price) + (t.consumable ? $" ×{t.stack}" : ""));
             }
         }
@@ -568,7 +656,7 @@ namespace Cubestruction.UI
         {
             if (_screen != Screen.Hud) return;
             var me = PlayerAvatar.Local;
-            if (me == null || me.role.Value != PlayerRole.Miner) return;
+            if (me == null || !Roles.CanShop(me.role.Value)) return;
             _shopOpen = !_shopOpen;
             _shopSig = -1;
             if (_shopOpen) _pauseOpen = false;
@@ -680,12 +768,13 @@ namespace Cubestruction.UI
             if (!IsVR && kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 if (_settingsOpen) _settingsOpen = false;
+                else if (_hotbarEditOpen) _hotbarEditOpen = false;
                 else if (_shopOpen) _shopOpen = false;
                 else if (_screen == Screen.Hud) _pauseOpen = !_pauseOpen;
             }
 
-            bool miner = me != null && me.role.Value == PlayerRole.Miner;
-            if (!miner) _shopOpen = false;
+            bool miner = me != null && Roles.UsesTools(me.role.Value);
+            if (me == null || !Roles.CanShop(me.role.Value)) _shopOpen = false;
             _settings.gameObject.SetActive(_settingsOpen);
             bool showBase = !_settingsOpen;
             _main.gameObject.SetActive(showBase && _screen == Screen.Main);
@@ -693,6 +782,9 @@ namespace Cubestruction.UI
             _lobby.gameObject.SetActive(showBase && _screen == Screen.Lobby);
             _end.gameObject.SetActive(showBase && _screen == Screen.End);
             _shop.gameObject.SetActive(showBase && _screen == Screen.Hud && _shopOpen);
+            if (_screen != Screen.Hud || me == null || !miner) _hotbarEditOpen = false;
+            _hotbarEdit.gameObject.SetActive(showBase && _hotbarEditOpen);
+            if (_hotbarEditOpen) { RefreshHotbarEdit(me); _shopOpen = false; _pauseOpen = false; }
             _pause.gameObject.SetActive(showBase && _screen == Screen.Hud && _pauseOpen && !_shopOpen);
             _hud.gameObject.SetActive(_screen == Screen.Hud && miner);
             if (_mobile) _mobile.gameObject.SetActive(_screen == Screen.Hud && miner && !BlocksGameplayInput && !StreakState.HideTouchControls);
@@ -740,9 +832,19 @@ namespace Cubestruction.UI
         {
             bool host = nm.IsHost || nm.IsServer;
             _startBtn.gameObject.SetActive(host);
-            _modeMining.interactable = host; _modeSiege.interactable = host;
+            _modeMining.interactable = host; _modeSiege.interactable = host; _modeTitan.interactable = host;
             _modeMining.transform.localScale = Vector3.one * (_lobbyMode == GameMode.Mining ? 1.06f : 0.94f);
             _modeSiege.transform.localScale = Vector3.one * (_lobbyMode == GameMode.GodSiege ? 1.06f : 0.94f);
+            _modeTitan.transform.localScale = Vector3.one * (_lobbyMode == GameMode.TitanSiege ? 1.06f : 0.94f);
+            // non-VR players vote for their God Siege role (the host's mode pick is synced only on Start, so always show it)
+            var meL = PlayerAvatar.Local;
+            bool flat = meL != null && meL.platform.Value != Platform.VR;
+            _voteRow.gameObject.SetActive(flat);
+            if (flat)
+            {
+                _voteRaider.transform.localScale = Vector3.one * (meL.siegeVote.Value == 0 ? 1.06f : 0.9f);
+                _voteCaster.transform.localScale = Vector3.one * (meL.siegeVote.Value == 1 ? 1.06f : 0.9f);
+            }
 
             _lobbyRefresh -= Time.unscaledDeltaTime;
             if (_lobbyRefresh > 0) return;
@@ -756,13 +858,17 @@ namespace Cubestruction.UI
                 anyVR |= p.platform.Value == Platform.VR;
                 string plat = p.platform.Value == Platform.VR ? "VR" : p.platform.Value == Platform.Mobile ? "Mobile" : "PC/Mac";
                 string col = ColorUtility.ToHtmlStringRGB(p.Tint * 0.8f);
-                sb.Append($"<color=#{col}>●</color>  {p.displayName.Value}   <i>{plat}</i>{(p.OwnerClientId == NetworkManager.ServerClientId ? "   (host)" : "")}\n");
+                string vote = p.platform.Value == Platform.VR ? "" : p.siegeVote.Value == 1 ? "   · wants Minion Caster" : "   · Raider";
+                sb.Append($"<color=#{col}>●</color>  {p.displayName.Value}   <i>{plat}</i>{(p.OwnerClientId == NetworkManager.ServerClientId ? "   (host)" : "")}<size=18>{vote}</size>\n");
             }
             _lobbyPlayers.text = sb.ToString();
             _lobbyHint.text = _lobbyMode == GameMode.Mining
                 ? "Mining: everyone climbs and mines the cube together. The match ends when the last pixel is cleared."
-                : anyVR ? "God Siege: the VR player is the God defending the cube; everyone else commands waves of units to destroy its Core."
-                        : "God Siege needs a VR player as God — without one, the host plays God with mouse controls.";
+                : _lobbyMode == GameMode.GodSiege
+                ? (anyVR ? "God Siege: the VR player is a giant sun God defending the cube. Raiders dig at it on foot; one Minion Caster (picked from volunteers) sends unit waves. Break the Core to win."
+                         : "God Siege needs a VR player as God — without one, the host plays God with mouse controls.")
+                : (anyVR ? "Titan Siege: the VR player is a Titan smashing through three walls. Everyone else defends with cannons, artillery, rocket pods, RPGs, webs and jetpacks. Bots fill in so it's always at least 5 against 1."
+                         : "Titan Siege: no headset here, so an AI Titan is coming. Defend the three walls with cannons, artillery, rocket pods, RPGs, webs and jetpacks.");
             if (!host) _lobbyHint.text += "\nWaiting for the host to start…";
         }
 
@@ -792,6 +898,20 @@ namespace Cubestruction.UI
             }
             int secs = (int)mm.elapsed.Value;
             if (secs != _lastTimer) { _lastTimer = secs; _timerText.text = MatchManager.FormatTime(secs); }
+            var td = Siege.TitanDirector.Instance;
+            if (td != null && td.IsActive)
+            {
+                // defenders: the Titan's health instead of voxels, plus what the turret you're at is doing
+                float max = Mathf.Max(1f, td.titanMaxHp.Value);
+                AeroTheme.SetBar(_voxelBar, td.titanHp.Value / max);
+                string phase = td.prep.Value ? $"Load the turrets! Titan in {Mathf.CeilToInt(td.prepLeft.Value)}s" : $"Wall {td.wall.Value + 1} of 3";
+                string turret = Siege.DefenderController.TurretHint();
+                _voxelText.verticalOverflow = VerticalWrapMode.Overflow;
+                _voxelText.text = $"Titan {td.titanHp.Value:0} HP  ·  {phase}" + (turret != null ? $"\n{turret}" : "");
+                _lastAlive = -1;
+                RefreshHotbar(me);
+                return;
+            }
             var cube = VoxelCube.Instance;
             if (cube != null && cube.IsSpawned && cube.alive.Value != _lastAlive)
             {
@@ -908,7 +1028,7 @@ namespace Cubestruction.UI
             _pointer.rightHand = me != null && me.IsSpawned ? me.rightHand : _menuRight;
 
             // menu panel: lazy follow, ~1.2 m ahead at eye level
-            bool menuVisible = _screen != Screen.Hud || _shopOpen || _settingsOpen || _pauseOpen;
+            bool menuVisible = _screen != Screen.Hud || _shopOpen || _settingsOpen || _pauseOpen || _hotbarEditOpen;
             _menuCanvas.gameObject.SetActive(menuVisible || _toasts.childCount > 0);
             _pointer.enabled = menuVisible;
             var fwd = Vector3.ProjectOnPlane(head.forward, Vector3.up).normalized;

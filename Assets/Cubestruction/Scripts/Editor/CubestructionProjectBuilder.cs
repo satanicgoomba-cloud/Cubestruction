@@ -47,12 +47,16 @@ namespace Cubestruction.EditorTools
             SetupPlayerSettings();
             var mats = CreateCoreMaterials();
             BuildToolVisuals();
+            BuildTitanModel();
             var explosive = BuildExplosivePrefab();
             var heli = BuildHeliPrefab();
             var cube = BuildCubePrefab(mats.voxel);
             var player = BuildPlayerPrefab(explosive, heli, mats.vignette);
             var units = BuildUnitPrefabs();
-            var list = BuildPrefabList(new[] { player, cube, explosive, heli }.Concat(units).ToArray());
+            _explosive = explosive;
+            _titanBot = BuildTitanBotPrefab();
+            _defenderBot = BuildDefenderBotPrefab();
+            var list = BuildPrefabList(new[] { player, cube, explosive, heli, _titanBot, _defenderBot }.Concat(units).ToArray());
             BuildScene(player, cube, units, list, mats);
             AssetDatabase.SaveAssets();
             Debug.Log("<color=#3cf>Cubestruction:</color> build complete. Open Assets/Cubestruction/Scenes/Cubestruction.unity and press Play " +
@@ -209,6 +213,53 @@ namespace Cubestruction.EditorTools
             }
         }
 
+        // ------------------------------------------------------------------ Titan (rigged model supplied by the user)
+
+        /// <summary>Resources/TitanModel.prefab from Models/Titan/Titan.fbx (see Blender/titan.py) with lit,
+        /// textured materials. TitanVisual poses its bones procedurally, so no animator or avatar is needed.</summary>
+        static void BuildTitanModel()
+        {
+            const string fbx = Models + "/Titan/Titan.fbx";
+            var importer = AssetImporter.GetAtPath(fbx) as ModelImporter;
+            if (importer == null) { Debug.LogWarning("Titan model missing: run Blender/titan.py"); return; }
+            bool dirty = false;
+            if (importer.animationType != ModelImporterAnimationType.Generic) { importer.animationType = ModelImporterAnimationType.Generic; dirty = true; }
+            if (importer.importAnimation) { importer.importAnimation = false; dirty = true; }
+            if (importer.materialImportMode != ModelImporterMaterialImportMode.None) { importer.materialImportMode = ModelImporterMaterialImportMode.None; dirty = true; }
+            if (dirty) importer.SaveAndReimport();
+            foreach (var tex in new[] { "Titan_1", "Titan_6", "Titan_11" })
+            {
+                var ti = AssetImporter.GetAtPath($"{Models}/Titan/{tex}.png") as TextureImporter;
+                if (ti != null && ti.maxTextureSize != 1024) { ti.maxTextureSize = 1024; ti.SaveAndReimport(); }
+            }
+            var src = AssetDatabase.LoadAssetAtPath<GameObject>(fbx);
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(src);
+            PrefabUtility.UnpackPrefabInstance(go, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            go.name = "TitanModel";
+            var lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Universal Render Pipeline/Simple Lit");
+            // body / head / hair meshes -> their texture (Blender/titan.py names the materials after the textures)
+            string TexFor(Renderer r) => r.name.Contains("Body") ? "Titan_11" : r.name.Contains("Head") ? "Titan_1" : "Titan_6";
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                string texName = TexFor(r);
+                string matPath = $"{Gen}/Materials/{texName}.mat";
+                var m = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                if (m == null) { m = new Material(lit); AssetDatabase.CreateAsset(m, matPath); }
+                m.shader = lit;
+                var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{Models}/Titan/{texName}.png");
+                m.SetTexture("_BaseMap", tex); m.mainTexture = tex;
+                m.SetColor("_BaseColor", Color.white);
+                m.SetFloat("_Smoothness", 0.25f);
+                EditorUtility.SetDirty(m);
+                var mats = new Material[r.sharedMaterials.Length];
+                for (int i = 0; i < mats.Length; i++) mats[i] = m;
+                r.sharedMaterials = mats;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            PrefabUtility.SaveAsPrefabAsset(go, $"{Root}/Resources/TitanModel.prefab");
+            Object.DestroyImmediate(go);
+        }
+
         // ------------------------------------------------------------------ network prefabs
 
         static GameObject SavePrefab(GameObject go, string name)
@@ -302,7 +353,40 @@ namespace Cubestruction.EditorTools
             go.AddComponent<FlatRig>().enabled = false;
             go.AddComponent<GodController>().enabled = false;
             go.AddComponent<CommanderController>().enabled = false;
+            go.AddComponent<TitanController>().enabled = false;
+            go.AddComponent<DefenderController>().enabled = false;
             return SavePrefab(go, "Player");
+        }
+
+        static GameObject _explosive, _titanBot, _defenderBot;
+
+        /// <summary>AI Titan: server-driven capsule (same shape as a player, scaled up at spawn); TitanVisual
+        /// adds the rigged model on every peer.</summary>
+        static GameObject BuildTitanBotPrefab()
+        {
+            var go = new GameObject("TitanBot");
+            go.AddComponent<NetworkObject>();
+            var nt = go.AddComponent<NetworkTransform>();
+            nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = true;
+            var cc = go.AddComponent<CharacterController>();
+            cc.height = 0.95f; cc.radius = 0.25f; cc.center = new Vector3(0, 0.475f, 0); cc.stepOffset = 0.3f; cc.slopeLimit = 55; cc.skinWidth = 0.03f;
+            go.AddComponent<TitanBot>();
+            return SavePrefab(go, "TitanBot");
+        }
+
+        /// <summary>AI defender: a Buddy with a launcher, moved by the server.</summary>
+        static GameObject BuildDefenderBotPrefab()
+        {
+            var go = new GameObject("DefenderBot");
+            go.AddComponent<NetworkObject>();
+            go.AddComponent<NetworkTransform>();
+            go.AddComponent<DefenderBot>();
+            var vis = new GameObject("Visual").transform;
+            vis.SetParent(go.transform, false);
+            var buddy = InstantiateModel("Buddy", vis, PrimitiveType.Capsule, new Vector3(0.4f, 0.5f, 0.4f));
+            buddy.name = "Buddy";
+            foreach (var c in buddy.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+            return SavePrefab(go, "DefenderBot");
         }
 
         static float MeshSize(GameObject go)
@@ -448,6 +532,12 @@ namespace Cubestruction.EditorTools
                 portals.Add(p.transform);
             }
             sd.spawnPortals = portals.ToArray();
+
+            var tdGo = new GameObject("TitanDirector");
+            tdGo.AddComponent<NetworkObject>();
+            var td = tdGo.AddComponent<TitanDirector>();
+            td.explosivePrefab = _explosive; td.titanBotPrefab = _titanBot; td.defenderBotPrefab = _defenderBot;
+            td.partMaterial = mats.pedestal;
 
             var fxGo = new GameObject("FxHub");
             fxGo.AddComponent<NetworkObject>();

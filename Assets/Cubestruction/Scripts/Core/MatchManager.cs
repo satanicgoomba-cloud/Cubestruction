@@ -28,6 +28,8 @@ namespace Cubestruction
         public readonly NetworkVariable<FixedString128Bytes> resultText = new NetworkVariable<FixedString128Bytes>();
 
         public System.Action<MatchState> OnStateChanged;
+        /// <summary>-autotest: make the first player the Titan even without a headset.</summary>
+        public static bool ForceHumanTitan;
         NetworkObject _cube;
 
         void Awake() { Instance = this; }
@@ -72,25 +74,41 @@ namespace Cubestruction
             resultText.Value = "";
             var players = PlayerAvatar.All.ToList();
 
-            int n = m == GameMode.GodSiege ? Balance.Siege.cubeSize : miningCubeSize;
+            bool titan = m == GameMode.TitanSiege;
+            int n = m == GameMode.GodSiege ? Balance.Siege.cubeSize : titan ? Siege.TitanMap.Size : miningCubeSize;
             _cube = Instantiate(cubePrefab, pedestal ? pedestal.position : Vector3.zero, Quaternion.identity);
             var vc = _cube.GetComponent<VoxelCube>();
             // In siege the cube isn't mined by players, so no co-op scaling.
-            vc.ServerConfigure(n, m == GameMode.Mining ? players.Count : 1);
+            if (titan) vc.ServerConfigure(n, 1, 1, Siege.TitanMap.CellSize);
+            else vc.ServerConfigure(n, m == GameMode.Mining ? players.Count : 1);
             vc.OnCellsDestroyedServer += OnCellsDestroyed;
             if (m == GameMode.Mining) vc.ServerEnableLoot();
             _cube.Spawn(true);
 
             // assign roles + reset economy
             foreach (var pl in players) pl.ServerResetForMatch(PlayerRole.Miner);
+            var giant = players.FirstOrDefault(p => p.platform.Value == Platform.VR) ?? players.FirstOrDefault();
+            if (titan)
+            {
+                // the Titan is the VR player; with no headset in the lobby it's the AI Titan (-autotest can force a person)
+                var vr = players.FirstOrDefault(p => p.platform.Value == Platform.VR);
+                giant = vr ?? (ForceHumanTitan ? players.FirstOrDefault() : null);
+                Siege.TitanDirector.Instance.ServerBegin(vc, players, giant);
+                state.Value = MatchState.Playing;
+                return;
+            }
             if (m == GameMode.GodSiege)
             {
-                var god = players.FirstOrDefault(p => p.platform.Value == Platform.VR) ?? players.FirstOrDefault();
-                var commander = players.FirstOrDefault(p => p != god);
-                if (god) god.role.Value = PlayerRole.God;
-                if (commander) commander.role.Value = PlayerRole.Commander;
-                // extra flat players become co-commanders sharing the purse
-                foreach (var pl in players.Where(p => p != god && p != commander)) pl.role.Value = PlayerRole.Commander;
+                // everyone else voted in the lobby: Raider (on foot) or Minion Caster; one caster, picked at random
+                var others = players.Where(p => p != giant).ToList();
+                var volunteers = others.Where(p => p.siegeVote.Value == 1).ToList();
+                var caster = volunteers.Count > 0 ? volunteers[Random.Range(0, volunteers.Count)] : null;
+                if (giant) giant.role.Value = PlayerRole.God;
+                foreach (var pl in others)
+                {
+                    pl.role.Value = pl == caster ? PlayerRole.Commander : PlayerRole.Raider;
+                    if (pl != caster) pl.ServerAddMoney(Balance.Siege.raiderStartMoney);
+                }
                 SiegeDirector.Instance.ServerBegin(vc);
             }
 
@@ -126,13 +144,14 @@ namespace Cubestruction
             resultText.Value = message;
             state.Value = MatchState.Ended;
             if (mode.Value == GameMode.GodSiege) SiegeDirector.Instance.ServerEnd();
+            if (mode.Value == GameMode.TitanSiege) Siege.TitanDirector.Instance?.ServerEnd();
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestLobbyRpc(RpcParams p = default)
         {
             if (p.Receive.SenderClientId != NetworkManager.ServerClientId) return;
-            if (state.Value == MatchState.Playing) SiegeDirector.Instance?.ServerEnd();
+            if (state.Value == MatchState.Playing) { SiegeDirector.Instance?.ServerEnd(); Siege.TitanDirector.Instance?.ServerEnd(); }
             if (_cube != null && _cube.IsSpawned) _cube.Despawn();
             state.Value = MatchState.Lobby;
             foreach (var pl in PlayerAvatar.All) pl.ServerResetForMatch(PlayerRole.Miner);

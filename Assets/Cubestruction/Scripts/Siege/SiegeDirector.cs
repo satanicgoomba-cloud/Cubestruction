@@ -103,6 +103,10 @@ namespace Cubestruction.Siege
         {
             if (!IsServer) return;
             active.Value = false;
+            foreach (var kv in new List<KeyValuePair<ulong, bool>>(_heldPlayers))
+                if (PlayerAvatar.ByClient.TryGetValue(kv.Key, out var held)) held.ReleasedRpc(Vector3.zero);
+            _heldPlayers.Clear();
+            _skillShots.Clear();
             if (_cube != null) _cube.DamageFilter = null;
             _cube = null;
             _shields.Clear();
@@ -138,10 +142,14 @@ namespace Cubestruction.Siege
             while (era.Value < C.eraXp.Length && xp.Value >= C.eraXp[era.Value]) era.Value++;
 
             // god mana + cooldowns
-            mana.Value = Mathf.Min(S.god.maxMana, mana.Value + S.god.manaRegen * dt);
+            // +15% regen for every Raider on the field (the Minion Caster doesn't count)
+            int raiders = 0;
+            foreach (var pl in PlayerAvatar.All) if (pl.role.Value == PlayerRole.Raider) raiders++;
+            mana.Value = Mathf.Min(S.god.maxMana, mana.Value + S.god.manaRegen * (1f + S.god.manaRegenPerRaider * raiders) * dt);
             for (int i = 0; i < skillCooldowns.Count; i++)
                 if (skillCooldowns[i] > 0) skillCooldowns[i] = Mathf.Max(0, skillCooldowns[i] - dt);
             if (timeSlowLeft.Value > 0) timeSlowLeft.Value = Mathf.Max(0, timeSlowLeft.Value - dt);
+            ServerTickSkillShots(dt);
             if (_shields.Count > 0)
             {
                 _shields.RemoveAll(s => Time.time >= s.until);
@@ -308,10 +316,7 @@ namespace Cubestruction.Siege
             if (!unitRef.TryGet(out NetworkObject no) || !no.TryGetComponent(out EnemyUnit unit)) return;
             var def = unit.Def;
             if (def == null || unit.state.Value == UnitState.Held) return;
-            if (!def.grabbable && unit.hp.Value > def.hp * 0.3f) return;
-            var grab = Skill("Grab");
-            if (!TrySpend(grab, grab.mana * Mathf.Max(1f, def.mass))) return;
-            unit.ServerGrab(god, left);
+            unit.ServerGrab(god, left);   // grabbing is the God's default move: free, anything goes
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -337,6 +342,353 @@ namespace Cubestruction.Siege
             if (Vector3.Distance(god.leftHand.position, unit.transform.position) > reach &&
                 Vector3.Distance(god.rightHand.position, unit.transform.position) > reach) return;
             unit.ServerHit(S.god.handSlapDamage, Vector3.ClampMagnitude(handVelocity, 20f) * 0.6f + Vector3.up * 3f, byGod: true);
+        }
+
+        public static int Mashes, PlayerGrabs, PlayerSwats, SkillThrows, SkillHits, Waves, Claps;   // -autotest
+
+        /// <summary>A hand slammed straight down onto a unit: squashed flat.</summary>
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void MashRpc(NetworkObjectReference unitRef, RpcParams p = default)
+        {
+            if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;
+            if (!unitRef.TryGet(out NetworkObject no) || !no.TryGetComponent(out EnemyUnit unit) || unit.state.Value == UnitState.Held) return;
+            float reach = 0.6f * god.Motor.WorldScale + 1.5f;
+            if (Vector3.Distance(god.leftHand.position, unit.transform.position) > reach &&
+                Vector3.Distance(god.rightHand.position, unit.transform.position) > reach) return;
+            Mashes++;
+            FxHub.Instance?.ShockwaveRpc(unit.transform.position, 1.2f);
+            unit.ServerTakeDamage(1e6f, byGod: true);
+        }
+
+        // ------------------------------------------------------------------ the God grabs, swats and squashes players
+
+        readonly Dictionary<ulong, bool> _heldPlayers = new Dictionary<ulong, bool>();   // client -> left hand
+
+        static bool Grabbable(PlayerAvatar pl) => pl != null && (pl.role.Value == PlayerRole.Raider || pl.role.Value == PlayerRole.Miner);
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void GrabPlayerRpc(ulong client, bool left, RpcParams p = default)
+        {
+            if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;
+            if (!PlayerAvatar.ByClient.TryGetValue(client, out var pl) || !Grabbable(pl) || _heldPlayers.ContainsKey(client)) return;
+            var hand = left ? god.leftHand : god.rightHand;
+            if (Vector3.Distance(hand.position, pl.Motor.Chest) > 0.5f * god.Motor.WorldScale + 2f) return;
+            _heldPlayers[client] = left;
+            PlayerGrabs++;
+            pl.HeldRpc(god.OwnerClientId, left);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void ReleasePlayerRpc(ulong client, Vector3 velocity, RpcParams p = default)
+        {
+            if (!SenderHasRole(p, PlayerRole.God, out _) || !_heldPlayers.Remove(client)) return;
+            if (PlayerAvatar.ByClient.TryGetValue(client, out var pl)) pl.ReleasedRpc(Vector3.ClampMagnitude(velocity, 40f));
+        }
+
+        public bool IsHeld(ulong client) => _heldPlayers.ContainsKey(client);
+
+        /// <summary>An open hand swatted a player (or slammed down on one): ragdoll them.</summary>
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void SwatPlayerRpc(ulong client, Vector3 handVelocity, bool mash, RpcParams p = default)
+        {
+            if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;
+            if (!PlayerAvatar.ByClient.TryGetValue(client, out var pl) || !Grabbable(pl) || _heldPlayers.ContainsKey(client)) return;
+            ulong id = p.Receive.SenderClientId + 1000;
+            if (_nextSlap.TryGetValue(id, out var t) && Time.time < t) return;
+            _nextSlap[id] = Time.time + 0.3f;
+            float reach = 0.6f * god.Motor.WorldScale + 1.5f;
+            if (Vector3.Distance(god.leftHand.position, pl.Motor.Chest) > reach && Vector3.Distance(god.rightHand.position, pl.Motor.Chest) > reach) return;
+            var v = Vector3.ClampMagnitude(handVelocity, 30f);
+            // a squash pancakes them (straight down, then a bounce); a swat sends them flying
+            var knock = mash ? new Vector3(v.x * 0.2f, 14f, v.z * 0.2f) : v * 0.9f + Vector3.up * 5f;
+            PlayerSwats++;
+            pl.KnockbackRpc(knock.normalized * Mathf.Max(knock.magnitude, 16f));
+            FxHub.Instance?.ShockwaveRpc(pl.Motor.Chest, mash ? 2f : 1f);
+        }
+
+        // ------------------------------------------------------------------ thrown skills (gestures)
+
+        /// <summary>Thrown skills: Zeus Bolt, Sun Bomb, Hail of Blades, Bubble Ward, Spring Bloom, Comet Drop.</summary>
+        public static bool IsThrown(string id) => id == "Smite" || id == "SunBomb" || id == "BladeHail" || id == "Shield" || id == "Regrow" || id == "Meteor";
+
+        class SkillShot { public int id; public SkillDef s; public Vector3 pos, vel; public float age; public int pierce; public Transform vis; }
+        readonly List<SkillShot> _skillShots = new List<SkillShot>();
+        readonly Dictionary<int, SkillShot> _skillVis = new Dictionary<int, SkillShot>();
+        int _skillShotId;
+
+        static float SkillGravity(string id) => id == "Smite" ? 2f : id == "BladeHail" ? 3f : id == "Meteor" ? 14f : 9.81f;
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void ThrowSkillRpc(int skillIndex, Vector3 origin, Vector3 velocity, RpcParams p = default)
+        {
+            if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;
+            if (skillIndex < 0 || skillIndex >= S.skills.Length || float.IsNaN(velocity.x) || float.IsNaN(origin.x)) return;
+            var s = S.skills[skillIndex];
+            if (!IsThrown(s.id) || Vector3.Distance(origin, god.headAnchor.position) > 2f * god.Motor.WorldScale) return;
+            if (!TrySpend(s, s.mana)) return;
+            ServerThrowSkill(s, origin, velocity);
+        }
+
+        /// <summary>Server: launch a thrown skill (also used by -autotest).</summary>
+        public void ServerThrowSkill(SkillDef s, Vector3 origin, Vector3 velocity)
+        {
+            velocity = Vector3.ClampMagnitude(velocity, 70f);
+            SkillThrows++;
+            if (s.id == "BladeHail")
+            {
+                // a fan of ten blades around the throw
+                var right = Vector3.Cross(Vector3.up, velocity).normalized;
+                for (int i = 0; i < 10; i++)
+                {
+                    float a = (i - 4.5f) * 4.5f;
+                    var v = Quaternion.AngleAxis(a, Vector3.up) * Quaternion.AngleAxis(Random.Range(-4f, 4f), right) * velocity;
+                    AddSkillShot(s, origin, v, 3);
+                }
+                return;
+            }
+            AddSkillShot(s, origin, velocity, 0);
+        }
+
+        void AddSkillShot(SkillDef s, Vector3 origin, Vector3 vel, int pierce)
+        {
+            int id = ++_skillShotId;
+            _skillShots.Add(new SkillShot { id = id, s = s, pos = origin, vel = vel, pierce = pierce });
+            SkillShotRpc(id, s.index, origin, vel);
+        }
+
+        void ServerTickSkillShots(float dt)
+        {
+            for (int i = _skillShots.Count - 1; i >= 0; i--)
+            {
+                var sh = _skillShots[i];
+                var from = sh.pos;
+                sh.vel += Vector3.down * SkillGravity(sh.s.id) * dt;
+                sh.pos += sh.vel * dt;
+                sh.age += dt;
+                bool end = sh.age > 6f || sh.pos.y < -15f;
+                Vector3 hitAt = sh.pos;
+                // world / cube
+                var seg = sh.pos - from;
+                if (!end && seg.sqrMagnitude > 1e-6f)
+                {
+                    var ray = new Ray(from, seg.normalized);
+                    if (_cube && _cube.Raycast(ray, seg.magnitude, out _, out var vp)) { end = true; hitAt = vp; }
+                    else if (Physics.Raycast(ray, out var rh, seg.magnitude, ~(1 << 5), QueryTriggerInteraction.Ignore)
+                             && rh.collider.GetComponentInParent<PlayerAvatar>() == null && rh.collider.GetComponentInParent<EnemyUnit>() == null)
+                    { end = true; hitAt = rh.point; }
+                }
+                // units in the path (blades cut through a few)
+                if (!end)
+                    foreach (var u in EnemyUnit.Live.ToArray())
+                    {
+                        if (!u || !u.IsSpawned || u.state.Value == UnitState.Held) continue;
+                        if (Vector3.Distance(u.transform.position + Vector3.up * 0.5f, sh.pos) > 0.9f) continue;
+                        if (sh.s.id == "BladeHail" && sh.pierce > 0)
+                        {
+                            sh.pierce--;
+                            u.ServerHit(sh.s.damage, sh.vel.normalized * 4f + Vector3.up * 2f, byGod: true);
+                            SkillHits++;
+                            continue;
+                        }
+                        end = true; hitAt = sh.pos; break;
+                    }
+                // Raiders in the path
+                if (!end)
+                    foreach (var pl in PlayerAvatar.All)
+                        if (Grabbable(pl) && Vector3.Distance(pl.Motor.Chest, sh.pos) < 0.9f) { end = true; hitAt = sh.pos; break; }
+                if (!end) continue;
+                _skillShots.RemoveAt(i);
+                SkillImpact(sh, hitAt);
+            }
+        }
+
+        void SkillImpact(SkillShot sh, Vector3 at)
+        {
+            var s = sh.s; var fx = FxHub.Instance;
+            SkillShotEndRpc(sh.id, at);
+            switch (s.id)
+            {
+                case "Smite":
+                    EnemyUnit.ServerBlast(at, s.radiusM, s.damage, 6f, byGod: true);
+                    KnockRaiders(at, s.radiusM * 1.4f, 12f);
+                    if (fx) { fx.LightningRpc(new[] { at + Vector3.up * 30f + Random.insideUnitSphere * 3f, at + Vector3.up * 12f, at }); fx.ExplosionRpc(at, s.radiusM * 0.6f, -1, true); }
+                    break;
+                case "SunBomb":
+                    EnemyUnit.ServerBlast(at, s.radiusM, s.damage, 12f, byGod: true);
+                    KnockRaiders(at, s.radiusM * 1.5f, 18f);
+                    if (fx) fx.ExplosionRpc(at, s.radiusM, -1, false);
+                    break;
+                case "BladeHail":
+                    KnockRaiders(at, 1.2f, 8f);
+                    if (fx) fx.ImpactRpc(at, -1);
+                    break;
+                case "Shield":
+                    _shields.Add(new Shield { pos = at, radius = s.radiusM, until = Time.time + s.duration });
+                    shieldsActive.Value = _shields.Count;
+                    ShieldFxRpc(at, s.radiusM, s.duration);
+                    break;
+                case "Regrow":
+                    if (_cube) _cube.ServerRegrow(at, s.radiusM, 60);
+                    if (fx) fx.ShockwaveRpc(at, s.radiusM);
+                    break;
+                case "Meteor":
+                    EnemyUnit.ServerBlast(at, s.radiusM, s.damage, 16f, byGod: true);   // never your own cube
+                    KnockRaiders(at, s.radiusM * 1.3f, 20f);
+                    if (fx) fx.ExplosionRpc(at, s.radiusM, -1, false);
+                    break;
+            }
+            SkillHits++;
+        }
+
+        void KnockRaiders(Vector3 at, float radius, float knock)
+        {
+            foreach (var pl in PlayerAvatar.All)
+            {
+                if (!Grabbable(pl) || _heldPlayers.ContainsKey(pl.OwnerClientId)) continue;
+                var d = pl.Motor.Chest - at;
+                if (d.magnitude > radius) continue;
+                pl.KnockbackRpc((d.normalized + Vector3.up * 0.7f).normalized * knock * (1f - d.magnitude / radius * 0.5f));
+            }
+        }
+
+        /// <summary>Sun Wave (kamehameha): a beam from both hands. Charge 0..1 sets width and damage.</summary>
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void SunWaveRpc(Vector3 origin, Vector3 dir, float charge, RpcParams p = default)
+        {
+            if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god) || float.IsNaN(dir.x) || dir.sqrMagnitude < 0.01f) return;
+            if (Vector3.Distance(origin, god.headAnchor.position) > 2f * god.Motor.WorldScale) return;
+            var s = Skill("SunWave");
+            if (!TrySpend(s, s.mana)) return;
+            ServerSunWave(origin, dir.normalized, Mathf.Clamp01(charge));
+        }
+
+        public void ServerSunWave(Vector3 origin, Vector3 dir, float charge)
+        {
+            var s = Skill("SunWave");
+            float width = s.radiusM * (0.6f + 1.4f * charge), len = 70f, dmg = s.damage * (0.4f + 0.6f * charge);
+            Waves++;
+            foreach (var u in EnemyUnit.Live.ToArray())
+            {
+                if (!u || !u.IsSpawned) continue;
+                var rel = u.transform.position + Vector3.up * 0.5f - origin;
+                float along = Vector3.Dot(rel, dir);
+                if (along < 0 || along > len || (rel - dir * along).magnitude > width) continue;
+                u.ServerHit(dmg, dir * 10f + Vector3.up * 4f, byGod: true);
+                SkillHits++;
+            }
+            foreach (var pl in PlayerAvatar.All)
+            {
+                if (!Grabbable(pl) || _heldPlayers.ContainsKey(pl.OwnerClientId)) continue;
+                var rel = pl.Motor.Chest - origin;
+                float along = Vector3.Dot(rel, dir);
+                if (along < 0 || along > len || (rel - dir * along).magnitude > width + 0.5f) continue;
+                pl.KnockbackRpc(dir * 20f + Vector3.up * 6f);
+            }
+            SunWaveFxRpc(origin, dir, width, len);
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        void SunWaveFxRpc(Vector3 origin, Vector3 dir, float width, float len) => StartCoroutine(SunWaveFx(origin, dir, width, len));
+
+        static IEnumerator SunWaveFx(Vector3 origin, Vector3 dir, float width, float len)
+        {
+            var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(beam.GetComponent<Collider>());
+            beam.name = "SunWave";
+            var mr = beam.GetComponent<MeshRenderer>();
+            if (FxHub.Instance) mr.sharedMaterial = FxHub.Instance.glowMaterial;
+            var block = new MaterialPropertyBlock();
+            beam.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
+            for (float e = 0; e < 0.9f && beam; e += Time.deltaTime)
+            {
+                float grow = Mathf.Min(1f, e * 6f), fade = 1f - Mathf.Clamp01((e - 0.5f) / 0.4f);
+                float l = len * grow;
+                beam.transform.position = origin + dir * l * 0.5f;
+                beam.transform.localScale = new Vector3(width * 2f * fade, l * 0.5f, width * 2f * fade);
+                block.SetColor("_BaseColor", new Color(1f, 0.9f, 0.45f, 0.75f * fade));
+                mr.SetPropertyBlock(block);
+                yield return null;
+            }
+            if (beam) Destroy(beam);
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        void SkillShotRpc(int id, int skillIndex, Vector3 pos, Vector3 vel)
+        {
+            if (skillIndex < 0 || skillIndex >= S.skills.Length) return;
+            var s = S.skills[skillIndex];
+            var vis = SkillVisual(s.id);
+            vis.position = pos;
+            _skillVis[id] = new SkillShot { id = id, s = s, pos = pos, vel = vel, vis = vis };
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        void SkillShotEndRpc(int id, Vector3 at)
+        {
+            if (_skillVis.TryGetValue(id, out var sh)) { if (sh.vis) Destroy(sh.vis.gameObject); _skillVis.Remove(id); }
+        }
+
+        void LateUpdate()
+        {
+            if (_skillVis.Count == 0) return;
+            float dt = Time.deltaTime;
+            foreach (var sh in _skillVis.Values)
+            {
+                if (!sh.vis) continue;
+                sh.vel += Vector3.down * SkillGravity(sh.s.id) * dt;
+                sh.pos += sh.vel * dt;
+                sh.vis.position = sh.pos;
+                if (sh.vel.sqrMagnitude > 0.01f) sh.vis.rotation = Quaternion.LookRotation(sh.vel);
+                if (sh.s.id == "BladeHail") sh.vis.Rotate(0, 0, 1080f * dt, Space.Self);
+            }
+        }
+
+        /// <summary>What a skill looks like in the God's hand and in flight.</summary>
+        public static Transform SkillVisual(string id, float scale = 2.5f)
+        {
+            var root = new GameObject("Skill_" + id).transform;
+            root.localScale = Vector3.one * scale;
+            Material glow = FxHub.Instance ? FxHub.Instance.glowMaterial : null;
+            void Piece(PrimitiveType t, Vector3 pos, Vector3 euler, Vector3 scale, Color c)
+            {
+                var g = GameObject.CreatePrimitive(t);
+                Destroy(g.GetComponent<Collider>());
+                g.transform.SetParent(root, false);
+                g.transform.localPosition = pos; g.transform.localEulerAngles = euler; g.transform.localScale = scale;
+                var mr = g.GetComponent<MeshRenderer>();
+                if (glow) mr.sharedMaterial = glow;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var b = new MaterialPropertyBlock(); b.SetColor("_BaseColor", c); mr.SetPropertyBlock(b);
+            }
+            switch (id)
+            {
+                case "Smite":   // a zig-zag bolt
+                    var y = new Color(1f, 0.95f, 0.45f, 1f);
+                    Piece(PrimitiveType.Cube, new Vector3(0, 0, 0.35f), new Vector3(0, 25, 0), new Vector3(0.12f, 0.12f, 0.55f), y);
+                    Piece(PrimitiveType.Cube, new Vector3(0.1f, 0, 0), new Vector3(0, -30, 0), new Vector3(0.12f, 0.12f, 0.5f), y);
+                    Piece(PrimitiveType.Cube, new Vector3(0, 0, -0.35f), new Vector3(0, 25, 0), new Vector3(0.12f, 0.12f, 0.5f), y);
+                    break;
+                case "SunBomb":
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, Vector3.one * 0.6f, new Color(1f, 0.6f, 0.2f, 1f));
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, Vector3.one * 0.85f, new Color(1f, 0.85f, 0.3f, 0.35f));
+                    break;
+                case "BladeHail":
+                    Piece(PrimitiveType.Cube, Vector3.zero, Vector3.zero, new Vector3(0.05f, 0.18f, 0.7f), new Color(0.8f, 0.95f, 1f, 1f));
+                    break;
+                case "Shield":
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, Vector3.one * 0.6f, new Color(0.55f, 0.95f, 1f, 0.45f));
+                    break;
+                case "Regrow":
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, new Vector3(0.35f, 0.45f, 0.35f), new Color(0.45f, 0.9f, 0.35f, 1f));
+                    break;
+                case "Meteor":
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, Vector3.one * 1.2f, new Color(1f, 0.55f, 0.25f, 1f));
+                    break;
+                default:
+                    Piece(PrimitiveType.Sphere, Vector3.zero, Vector3.zero, Vector3.one * 0.4f, Color.white);
+                    break;
+            }
+            return root;
         }
 
         // ------------------------------------------------------------------ client FX

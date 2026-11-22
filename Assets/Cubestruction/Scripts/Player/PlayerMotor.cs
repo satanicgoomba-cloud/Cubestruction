@@ -29,6 +29,14 @@ namespace Cubestruction.Player
         public const float MaxJetFuel = 6f;
         public float WorldScale { get => transform.localScale.x; set => transform.localScale = Vector3.one * value; }
         public bool Frozen;    // ragdoll / menus
+        /// <summary>Walk/sprint speed multiplier (the Titan is huge but shouldn't cross the map in 2 s).</summary>
+        [System.NonSerialized] public float speedMul = 1f;
+        [System.NonSerialized] public bool canJump = true;
+        /// <summary>Owner: every surface the capsule touches while moving (the Titan grinds walls with it).</summary>
+        public System.Action<ControllerColliderHit> OnHit;
+        /// <summary>Set while something (the God's hand) holds this player: the body follows it, no simulation.</summary>
+        [System.NonSerialized] public Transform heldBy;
+        [System.NonSerialized] public Vector3 heldOffset;
         /// <summary>A super mode (Meteor Dive) drives the body directly: gravity and input are ignored.</summary>
         [System.NonSerialized] public Vector3? forcedVelocity;
         public CollisionFlags LastFlags { get; private set; }
@@ -90,7 +98,7 @@ namespace Cubestruction.Player
 
         public void Jump()
         {
-            if (Frozen || _grappling) return;   // while swinging, jump reels in instead
+            if (Frozen || _grappling || !canJump) return;   // while swinging, jump reels in instead
             if (Grounded || Climbing) { Velocity.y = jumpSpeed; Grounded = false; Climbing = false; return; }
             if (!_usedDoubleJump && HasTool("RocketBoots"))
             {
@@ -123,6 +131,14 @@ namespace Cubestruction.Player
 
         void Update()
         {
+            if (heldBy != null)
+            {
+                // dangling from a giant hand: follow it exactly; physics resumes on release (Teleport re-enables)
+                if (Controller.enabled) Controller.enabled = false;
+                transform.position = heldBy.position + heldOffset;
+                Velocity = Vector3.zero;
+                return;
+            }
             if (Frozen || !Controller.enabled) return;
             float dt = Time.deltaTime;
             float scale = WorldScale;
@@ -155,7 +171,7 @@ namespace Cubestruction.Player
             if (_grappling) { Swing(dt, scale); FallCheck(); return; }
 
             // ---- walking
-            Vector3 targetH = moveIntent * (sprint ? sprintSpeed : walkSpeed) * scale;
+            Vector3 targetH = moveIntent * (sprint ? sprintSpeed : walkSpeed) * scale * speedMul;
             Vector3 h = new Vector3(Velocity.x, 0, Velocity.z);
             float control = Grounded || _floatLeft > 0 ? 12f : 12f * airControl;
             h = Vector3.MoveTowards(h, targetH, control * scale * dt);
@@ -216,6 +232,7 @@ namespace Cubestruction.Player
 
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            OnHit?.Invoke(hit);
             if (Time.time < _gooReady) return;
             var cube = VoxelCube.Instance;
             if (!cube || cube.GooCount == 0 || hit.collider.GetComponentInParent<VoxelChunk>() == null) return;
@@ -233,11 +250,16 @@ namespace Cubestruction.Player
             GooBounces++;
         }
 
+        /// <summary>A mode can pick where fallen players come back (Titan Siege: the current wall).</summary>
+        public static System.Func<PlayerMotor, Vector3?> RespawnOverride;
+
         void FallCheck()
         {
             // fell off the arena (the meadow is 12 m down): respawn on the pedestal edge
             if (transform.position.y < -8f)
             {
+                var over = RespawnOverride?.Invoke(this);
+                if (over.HasValue) { Teleport(over.Value, transform.eulerAngles.y); return; }
                 var cube = VoxelCube.Instance;
                 var p = cube ? cube.transform.position + Vector3.back * (cube.HalfExtent + 2.5f) : Vector3.up;
                 Teleport(p + Vector3.up, 0);

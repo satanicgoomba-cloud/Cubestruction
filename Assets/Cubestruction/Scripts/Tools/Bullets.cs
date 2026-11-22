@@ -24,8 +24,10 @@ namespace Cubestruction.Tools
             public System.Random rng;     // per-bullet, seeded from the volley: splits match on every peer
             public ulong owner;
             public bool authority;
+            public bool stuck; public Vector3 warpTo;   // Warp Kunai sitting where it struck
             public Transform visual;
             public TrailRenderer trail;
+            public LineRenderer str;      // Saw Yo-yo string back to the thrower's hand
         }
 
         public Material material;   // glow material from FxHub
@@ -45,7 +47,10 @@ namespace Cubestruction.Tools
         {
             var rng = new System.Random(seed);
             int pellets = Mathf.Max(1, t.pellets);
+            // the direction's length is a speed multiplier (VR throws: how hard you threw); 1 = normal
+            float mul = dir.magnitude;
             dir = dir.normalized;
+            mul = mul > 0.98f && mul < 1.02f ? 1f : Mathf.Clamp(mul, 0.2f, 2f);
             for (int i = 0; i < pellets && _live.Count < MaxLive; i++)
             {
                 var d = dir;
@@ -58,7 +63,7 @@ namespace Cubestruction.Tools
                 var b = new Bullet
                 {
                     rng = new System.Random(seed * 31 + i),
-                    def = t, pos = origin, vel = d * t.speed * scale,
+                    def = t, pos = origin, vel = d * t.speed * scale * mul,
                     bouncesLeft = t.bounces, pierceLeft = t.pierceCells,
                     life = t.lifeS > 0 ? t.lifeS : 3f, scale = scale, owner = owner, authority = authority,
                 };
@@ -101,6 +106,7 @@ namespace Cubestruction.Tools
                     Release(b); _live.RemoveAt(i); continue;
                 }
                 b.visual.position = b.pos;
+                if (b.def.carve && b.def.returnS > 0) DrawString(b);
                 if (b.def.bulletShape == "disc" && b.vel.sqrMagnitude > 0.01f)
                     b.visual.rotation = Quaternion.LookRotation(b.vel) * Quaternion.Euler(0, Time.time * 1440f % 360f, 0);
                 else if (b.def.bulletShape == "torpedo" && b.vel.sqrMagnitude > 0.01f)
@@ -148,6 +154,7 @@ namespace Cubestruction.Tools
         bool Step(Bullet b, float dt, VoxelCube cube)
         {
             var t = b.def;
+            if (b.stuck) return true;
             if (b.burrowing) return Burrow(b, dt, cube);
             if (t.carve) return Carve(b, dt, cube);
             if (t.floatS > 0 && b.age > 0.4f && TouchesLocalPlayer(b))
@@ -190,21 +197,17 @@ namespace Cubestruction.Tools
             }
             if (t.warpOnHit)
             {
-                // Warp Kunai: the thrower blinks to where it struck (handled on the thrower's own client)
-                var me = PlayerAvatar.Local;
-                if (me != null && me.OwnerClientId == b.owner)
-                {
-                    float s = b.scale;
-                    var to = point + normal * 0.4f * s;
-                    if (normal.y < 0.5f) to -= Vector3.up * 0.6f * s;   // on a wall: hang with your head at the hit
-                    me.Motor.Teleport(to, me.transform.eulerAngles.y);
-                    Warps++; LastWarp = to;
-                }
+                // Warp Kunai: it sticks where it struck; its thrower presses again to blink there
+                float s = b.scale;
+                var to = point + normal * 0.4f * s;
+                if (normal.y < 0.5f) to -= Vector3.up * 0.6f * s;   // on a wall: hang with your head at the hit
                 FxHub.Instance?.LocalBlast(point, 0.35f * b.scale, BulletColor(t));
                 if (isVoxel && b.authority && cube.IsSpawned && t.damage > 0)
                     cube.ServerDamage(cube.CellToWorld(cell), t.radiusCells, t.damage, t.tier, false, b.owner);
-                b.pos = point;
-                return false;
+                b.pos = point; b.vel = Vector3.zero;
+                b.stuck = true; b.warpTo = to;
+                b.life = Mathf.Max(b.life, 6f);
+                return true;
             }
             if (t.explodeOnImpact)
             {
@@ -288,6 +291,7 @@ namespace Cubestruction.Tools
             {
                 if (!PlayerAvatar.ByClient.TryGetValue(b.owner, out var pl)) return false;
                 var hand = pl.rightHand ? pl.rightHand.position : pl.Motor.Chest;
+                if (pl.IsVR && pl.leftHand && Vector3.Distance(pl.leftHand.position, b.pos) < Vector3.Distance(hand, b.pos)) hand = pl.leftHand.position;
                 var to = hand - b.pos;
                 if (to.magnitude < 0.6f * b.scale) { Returns++; return false; }   // caught
                 b.vel = Vector3.Lerp(b.vel, to.normalized * t.speed * b.scale * 1.2f, dt * 8f);
@@ -305,6 +309,27 @@ namespace Cubestruction.Tools
                 }
             }
             return true;
+        }
+
+        /// <summary>Remove <paramref name="owner"/>'s newest Warp Kunai (flying or stuck); where to blink to.</summary>
+        public bool TakeKunai(ulong owner, out Vector3 to)
+        {
+            to = default;
+            for (int i = _live.Count - 1; i >= 0; i--)
+            {
+                var b = _live[i];
+                if (!b.def.warpOnHit || b.owner != owner) continue;
+                if (b.stuck) to = b.warpTo;
+                else
+                {
+                    // mid-flight: a step back along its path so you don't land inside a wall
+                    var back = b.vel.sqrMagnitude > 0.01f ? -b.vel.normalized : Vector3.up;
+                    to = b.pos + back * 0.5f * b.scale - Vector3.up * 0.6f * b.scale;
+                }
+                Release(b); _live.RemoveAt(i);
+                return true;
+            }
+            return false;
         }
 
         Transform Get(ToolDef t, float scale)
@@ -341,8 +366,44 @@ namespace Cubestruction.Tools
             return go.transform;
         }
 
+        /// <summary>The yo-yo's string: from the thrower's hand to the yo-yo, with a little sag.</summary>
+        void DrawString(Bullet b)
+        {
+            if (!PlayerAvatar.ByClient.TryGetValue(b.owner, out var pl)) return;
+            var hand = pl.rightHand ? pl.rightHand.position : pl.Motor.Chest;
+            if (pl.IsVR && pl.leftHand && Vector3.Distance(pl.leftHand.position, b.pos) < Vector3.Distance(hand, b.pos)) hand = pl.leftHand.position;
+            if (!b.str)
+            {
+                b.str = b.visual.GetComponent<LineRenderer>();
+                if (!b.str)
+                {
+                    b.str = b.visual.gameObject.AddComponent<LineRenderer>();
+                    b.str.sharedMaterial = material;
+                    b.str.positionCount = 8;
+                    b.str.numCapVertices = 1;
+                    b.str.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+                b.str.useWorldSpace = true;
+                b.str.widthMultiplier = 0.012f * b.scale;
+                b.str.startColor = new Color(1f, 1f, 1f, 0.95f); b.str.endColor = new Color(0.8f, 0.9f, 1f, 0.95f);
+                b.str.enabled = true;
+            }
+            float len = Vector3.Distance(hand, b.pos);
+            for (int i = 0; i < 8; i++)
+            {
+                float k = i / 7f;
+                // slack while it flies out, taut as it comes back
+                float sag = Mathf.Sin(k * Mathf.PI) * Mathf.Min(0.6f, len * 0.08f) * (b.age < b.def.returnS * 0.5f ? 1f : 0.3f);
+                b.str.SetPosition(i, Vector3.Lerp(hand, b.pos, k) - Vector3.up * sag);
+            }
+            Strings++;
+        }
+        public static int Strings;   // -autotest
+
         void Release(Bullet b)
         {
+            if (b.str) { b.str.enabled = false; b.str = null; }
+            else { var lr = b.visual ? b.visual.GetComponent<LineRenderer>() : null; if (lr) lr.enabled = false; }
             if (!b.visual) return;
             b.trail.Clear();
             b.visual.gameObject.SetActive(false);

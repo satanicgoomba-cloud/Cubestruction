@@ -57,6 +57,14 @@ namespace Cubestruction.Tools
             _rb.useGravity = !rocket;
             _rb.mass = placed ? 6f : 0.4f;
             if (!_rb.isKinematic) _rb.linearVelocity = _initVel;
+            if (t.id == "BoingPad")
+            {
+                // gyro: the spring always points up, it never tumbles or rolls away
+                _rb.freezeRotation = true;
+                _rb.angularVelocity = Vector3.zero;
+                transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
+                _rb.linearDamping = 1.5f;
+            }
             _pulsesLeft = t.id == "BlackHoleGrenade" ? Mathf.Max(1, t.pellets) : 0;
         }
 
@@ -128,12 +136,26 @@ namespace Cubestruction.Tools
         }
 
         /// <summary>Boing Pad: anyone standing on it gets launched straight up (knockback = launch speed).</summary>
+        float _padCheck;
+        public static int PadsUpright, PadsTilted;   // -autotest
+
         void TickPad(ToolDef t)
         {
+            // stay upright; once it has landed, park it (no sliding off), and drop again if the floor goes
+            transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
+            if ((_padCheck -= Time.deltaTime) <= 0)
+            {
+                _padCheck = 0.25f;
+                bool floor = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.3f, ~(1 << 5), QueryTriggerInteraction.Ignore)
+                             || (VoxelCube.Instance && VoxelCube.Instance.SolidNear(transform.position - Vector3.up * 0.1f, 0.12f, out _));
+                if (!_rb.isKinematic && floor && _rb.linearVelocity.magnitude < 0.4f) { _rb.linearVelocity = Vector3.zero; _rb.isKinematic = true; }
+                else if (_rb.isKinematic && !floor) _rb.isKinematic = false;
+                if (Vector3.Angle(transform.up, Vector3.up) < 2f) PadsUpright++; else PadsTilted++;
+            }
             var top = transform.position;
             foreach (var pl in PlayerAvatar.All)
             {
-                if (pl.role.Value == PlayerRole.God) continue;
+                if (Roles.IsGiant(pl.role.Value)) continue;
                 var d = pl.transform.position - top;
                 float s = pl.Motor.WorldScale;
                 if (new Vector2(d.x, d.z).magnitude > 0.85f || d.y < -0.4f || d.y > 0.9f * s) continue;
@@ -172,7 +194,7 @@ namespace Cubestruction.Tools
             float blastR = Mathf.Max(radiusM * 2.2f, 2.5f);
             foreach (var pl in PlayerAvatar.All)
             {
-                if (pl.role.Value == PlayerRole.God) continue;
+                if (Roles.IsGiant(pl.role.Value)) continue;
                 var center = pl.transform.position + Vector3.up * 0.5f;
                 var d = center - pos;
                 float dist = d.magnitude;
@@ -186,6 +208,7 @@ namespace Cubestruction.Tools
             }
             // siege units get thrown too
             Siege.EnemyUnit.ServerBlast(pos, blastR, t.damage * 0.5f, Mathf.Abs(t.knockback));
+            Siege.TitanDirector.ServerExplosion(pos, radiusM, t, owner);
             FxHub.Instance?.ExplosionRpc(pos, radiusM, t.index, pulse);
         }
     }

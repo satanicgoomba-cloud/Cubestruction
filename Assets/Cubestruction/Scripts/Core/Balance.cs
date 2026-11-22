@@ -129,6 +129,8 @@ namespace Cubestruction
     {
         public float maxMana; public float manaRegen; public float manaPerKill; public float handSlapDamage;
         public float handSlapCooldown; public float throwDamagePerMps; public float grabMaxSeconds; public float scale;
+        /// <summary>Mana regen bonus per Raider in the match (+15% each).</summary>
+        public float manaRegenPerRaider = 0.15f;
     }
 
     [Serializable] public class SkillDef
@@ -150,6 +152,8 @@ namespace Cubestruction
     {
         public int cubeSize = 24;
         public float matchSeconds = 900;
+        /// <summary>Raiders start with this much to spend in the shop.</summary>
+        public int raiderStartMoney = 400;
         public CommanderDef commander;
         public GodDef god;
         public SkillDef[] skills;

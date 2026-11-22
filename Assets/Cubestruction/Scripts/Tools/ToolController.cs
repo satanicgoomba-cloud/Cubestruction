@@ -58,7 +58,7 @@ namespace Cubestruction.Tools
             public bool trigger, triggerPrev;
             public float cooldown;
             public float spin;                // minigun spin-up
-            public GameObject visual; public int visualTool = -2;
+            public GameObject visual; public int visualTool = -2; public Vector3 tipLocal;
             public LineRenderer line;
             public Vector3 lastTip; public bool tipInit;
             public bool throwArmed;
@@ -78,6 +78,7 @@ namespace Cubestruction.Tools
             leftTool.OnValueChanged += (_, __) => RefreshVisuals();
             rightTool.OnValueChanged += (_, __) => RefreshVisuals();
             clonesOn.OnValueChanged += (_, on) => CloneEcho.Sync(this, on);
+            _avatar.role.OnValueChanged += (_, __) => { _left.visualTool = _right.visualTool = -2; RefreshVisuals(); };
             CloneEcho.Sync(this, clonesOn.Value);
             if (IsOwner)
             {
@@ -93,6 +94,20 @@ namespace Cubestruction.Tools
         /// <summary>Tools that can be put in a hand: owned actives + consumables with charges. Passives (gloves, boots, jetpack) are always on.</summary>
         public List<ToolDef> Hotbar()
         {
+            var all = Usable();
+            if (all.Count <= GameSettings.HotbarMax) return all;
+            // too many for two rows: the player's pinned picks first, then the rest, 16 in all
+            var pins = new HashSet<string>(GameSettings.HotbarPins.Split(','));
+            var list = all.FindAll(t => pins.Contains(t.id));
+            if (list.Count > GameSettings.HotbarMax) list.RemoveRange(GameSettings.HotbarMax, list.Count - GameSettings.HotbarMax);
+            foreach (var t in all) { if (list.Count >= GameSettings.HotbarMax) break; if (!list.Contains(t)) list.Add(t); }
+            list.Sort((a, b) => a.index.CompareTo(b.index));
+            return list;
+        }
+
+        /// <summary>Every tool you could put in a hand right now (the hotbar shows up to 16 of them).</summary>
+        public List<ToolDef> Usable()
+        {
             var list = new List<ToolDef>();
             foreach (var t in Balance.Tools)
             {
@@ -100,6 +115,21 @@ namespace Cubestruction.Tools
                 if (_avatar.CanUse(t)) list.Add(t);
             }
             return list;
+        }
+
+        /// <summary>0..1 of the cooldown left on this tool in whichever hand holds it (for the hotbar).</summary>
+        public float CooldownFrac(int toolIndex, out float secondsLeft)
+        {
+            secondsLeft = 0; float frac = 0;
+            foreach (var h in new[] { _left, _right })
+            {
+                if ((h.isLeft ? leftTool.Value : rightTool.Value) != toolIndex || h.cooldown <= 0) continue;
+                var t = Balance.Tool(toolIndex);
+                if (t == null || t.cooldown < 0.25f) continue;   // rapid-fire guns: no flicker
+                secondsLeft = Mathf.Max(secondsLeft, h.cooldown);
+                frac = Mathf.Max(frac, Mathf.Clamp01(h.cooldown / t.cooldown));
+            }
+            return frac;
         }
 
         public ToolDef Equipped(bool left) => Balance.Tool(left ? leftTool.Value : rightTool.Value);
@@ -111,6 +141,7 @@ namespace Cubestruction.Tools
             // left hand may be empty (-1) so it's free for climbing
             int pos = bar.FindIndex(t => t.index == v.Value);
             int count = bar.Count + (left ? 1 : 0);
+            if (count == 0) return;   // nothing to hold (Titan, God...)
             int next = ((pos < 0 ? (left ? bar.Count : 0) : pos) + dir + count) % count;
             v.Value = next < bar.Count ? bar[next].index : -1;
         }
@@ -142,7 +173,7 @@ namespace Cubestruction.Tools
         {
             if (IsSpawned && IsServer) ServerSuperTick();
             if (!IsSpawned || !IsOwner) return;
-            if (_avatar.role.Value != PlayerRole.Miner || MatchManager.Instance == null ||
+            if (!Roles.UsesTools(_avatar.role.Value) || MatchManager.Instance == null ||
                 MatchManager.Instance.state.Value != MatchState.Playing || _motor.Frozen)
             {
                 _left.trigger = _right.trigger = false;
@@ -155,29 +186,85 @@ namespace Cubestruction.Tools
 
         // ------------------------------------------------------------------ rope swing (owner)
 
+        /// <summary>How long one web-line holds before it snaps (no hanging in the sky forever).</summary>
+        public const float WebSeconds = 3f;
+        /// <summary>The invisible web ceiling sits this many voxels above the top of the cube.</summary>
+        public const float SkyCeilingCells = 20f;
+        bool _skyAnchor, _webUsedThisHold;
+        float _webAge;
+        public static int SkyWebs, WebsSnapped;   // -autotest counters
+
+        /// <summary>Height of the invisible ceiling webs stick to, or NaN when there's no cube.</summary>
+        public static float SkyCeilingY
+        {
+            get
+            {
+                var cube = VoxelCube.Instance;
+                if (!cube || cube.Grid == null) return float.NaN;
+                return cube.ContentTopY + SkyCeilingCells * cube.cellSize;
+            }
+        }
+
+        /// <summary>Spider-Man anchor: a bit ahead of you (the way you're moving, not the way you look)
+        /// and high above, on the invisible ceiling, unless something solid is in the way first.</summary>
+        bool SkyAnchor(out Vector3 anchor)
+        {
+            anchor = default;
+            float ceil = SkyCeilingY;
+            if (float.IsNaN(ceil)) return false;
+            float s = _motor.WorldScale;
+            var chest = _motor.Chest;
+            float h = ceil - chest.y;
+            if (h < 2.5f * s) return false;   // already up at the ceiling
+            var v = _motor.Velocity; v.y = 0;
+            Vector3 fwd;
+            if (v.magnitude > 1.5f * s) fwd = v.normalized;
+            else if (_motor.moveIntent.sqrMagnitude > 0.04f) fwd = _motor.moveIntent.normalized;
+            else fwd = Vector3.ProjectOnPlane(swingAim.direction, Vector3.up).normalized;
+            if (fwd.sqrMagnitude < 0.01f) fwd = transform.forward;
+            float ahead = Mathf.Clamp(h * 0.35f, 1.5f * s, 7f * s);
+            anchor = new Vector3(chest.x, ceil, chest.z) + fwd * ahead;
+            var ray = new Ray(chest, (anchor - chest).normalized);
+            if (RaycastWorld(ray, Vector3.Distance(chest, anchor), out var p)) { anchor = p; _skyAnchor = false; }
+            else _skyAnchor = true;
+            return true;
+        }
+
         void TickSwing()
         {
             _swingCooldown -= Time.deltaTime;
-            bool canSwing = HasTether && _avatar.role.Value == PlayerRole.Miner && !_motor.Frozen &&
+            bool canSwing = HasTether && Roles.UsesTools(_avatar.role.Value) && !_motor.Frozen && !Siege.TitanDirector.InputLocked(_avatar) &&
                             MatchManager.Instance != null && MatchManager.Instance.state.Value == MatchState.Playing;
             bool held = swingHeld && canSwing;
-            if (held && !_motor.IsGrappling && _swingCooldown <= 0)
+            if (!held) _webUsedThisHold = false;
+            // one web per press: a web that snapped needs a fresh press, so nobody hangs in the sky
+            if (held && !_motor.IsGrappling && !_webUsedThisHold && _swingCooldown <= 0)
             {
-                // keep trying while held: swing the aim across a wall and it catches (Spider-Man style)
                 var t = Balance.Tool("GrappleHook");
-                if (RaycastWorld(swingAim, t.rangeM * _motor.WorldScale, out var p))
+                bool ok = SkyAnchor(out var p);
+                if (!ok) { _skyAnchor = false; ok = RaycastWorld(swingAim, t.rangeM * _motor.WorldScale, out p); }
+                if (ok)
                 {
                     _motor.StartGrapple(p);
                     _anchorCheck = 0.2f;
+                    _webAge = 0;
+                    _webUsedThisHold = true;
+                    if (_skyAnchor) SkyWebs++;
                     if (_avatar.IsVR) Haptic(swingHand == _avatar.leftHand ? _left : _right, 0.5f);
                     FxHub.Instance?.BulletImpact(p, t, false);
                 }
                 _swingCooldown = 0.1f;
             }
             if (!held && _motor.IsGrappling) { _motor.StopGrapple(); _swingCooldown = 0.15f; }
+            if (_motor.IsGrappling && (_webAge += Time.deltaTime) >= WebSeconds)
+            {
+                _motor.StopGrapple();   // the web snaps; let go and press again for the next one
+                _swingCooldown = 0.1f;
+                WebsSnapped++;
+            }
 
-            // the voxel we hang from was destroyed: drop
-            if (_motor.IsGrappling && (_anchorCheck -= Time.deltaTime) <= 0)
+            // the voxel we hang from was destroyed: drop (sky webs hang from nothing)
+            if (_motor.IsGrappling && !_skyAnchor && (_anchorCheck -= Time.deltaTime) <= 0)
             {
                 _anchorCheck = 0.2f;
                 var cube = VoxelCube.Instance;
@@ -297,6 +384,20 @@ namespace Cubestruction.Tools
                     Magnet(h, t, pressed, released, scale);
                     break;
 
+                case ToolCategory.Gun when t.warpOnHit && pressed && FxHub.Instance && FxHub.Instance.TakeKunai(OwnerClientId, out var warpTo):
+                    // Warp Kunai: press again while your kunai is out (flying or stuck) to blink to it
+                    _motor.Teleport(warpTo, transform.eulerAngles.y);
+                    KunaiGoneRpc();
+                    FxHub.Instance.LocalBlast(warpTo + Vector3.up * 0.5f * scale, 0.5f * scale, Bullets.BulletColor(t));
+                    Bullets.Warps++; Bullets.LastWarp = warpTo;
+                    h.cooldown = 0.25f;
+                    Haptic(h, 0.8f);
+                    break;
+
+                case ToolCategory.Gun when _avatar.IsVR && VrThrowable(t):
+                    VrThrowBullet(h, t, pressed, released, scale);
+                    break;
+
                 case ToolCategory.Gun:
                 {
                     bool supported = !t.twoHanded || TwoHandSupported(h);
@@ -305,14 +406,15 @@ namespace Cubestruction.Tools
                     bool fire = supported && h.cooldown <= 0 && h.spin >= 1 && (auto ? h.trigger : pressed);
                     if (!fire) break;
                     var ray = Aim(h, t);
-                    if (t.id == "RocketLauncher") ThrowRpc(t.index, ray.origin + ray.direction * 0.6f * scale, ray.direction * 32f);
+                    if (t.id == "RocketLauncher") { var m = Muzzle(h, ray, scale, out var rd); ThrowRpc(t.index, m, rd * 32f); }
                     else if (t.IsProjectile)
                     {
-                        // physics bullets: draw ours now (and simulate damage too if we are the host), tell the server
-                        var muzzle = ray.origin + ray.direction * 0.35f * scale;
+                        // physics bullets leave the end of the barrel, aimed at whatever the crosshair is on;
+                        // draw ours now (and simulate damage too if we are the host), tell the server
+                        var muzzle = Muzzle(h, ray, scale, out var dir);
                         int seed = Random.Range(1, int.MaxValue);
-                        FxHub.Instance?.FireBullets(t, muzzle, ray.direction, seed, OwnerClientId, IsServer, scale);
-                        FireRpc(t.index, muzzle, ray.direction, seed, scale);
+                        FxHub.Instance?.FireBullets(t, muzzle, dir, seed, OwnerClientId, IsServer, scale);
+                        FireRpc(t.index, muzzle, dir, seed, scale);
                     }
                     else
                     {
@@ -374,6 +476,85 @@ namespace Cubestruction.Tools
             if (t.cat != ToolCategory.Beam) SetLine(h, false);
         }
 
+        /// <summary>The end of the held tool's barrel (from its model bounds), and the direction from there to
+        /// what the aim ray is pointing at, so flat players' shots leave the gun and still hit the crosshair.</summary>
+        Vector3 Muzzle(Hand h, Ray aim, float scale, out Vector3 dir)
+        {
+            dir = aim.direction.normalized;
+            var tip = h.visual ? h.visual.transform.TransformPoint(h.tipLocal) : aim.origin + dir * 0.35f * scale;
+            if (!_avatar.IsVR)
+            {
+                var target = RaycastWorld(aim, 250f * scale, out var p) ? p : aim.GetPoint(250f * scale);
+                var d = target - tip;
+                // very close targets (the barrel is past them): keep the camera direction
+                if (d.sqrMagnitude > 0.09f * scale * scale && Vector3.Dot(d.normalized, dir) > 0.6f) dir = d.normalized;
+            }
+            LastMuzzle = tip;
+            return tip;
+        }
+        public static Vector3 LastMuzzle;   // -autotest
+
+        /// <summary>Barrel tip in the visual's local space: the far end of its bounds along +Z (tools point +Z).</summary>
+        static Vector3 TipLocal(GameObject v)
+        {
+            var root = v.transform;
+            var min = Vector3.one * float.MaxValue; var max = Vector3.one * float.MinValue;
+            bool any = false;
+            foreach (var mf in v.GetComponentsInChildren<MeshFilter>())
+            {
+                if (!mf.sharedMesh) continue;
+                var b = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var c = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    var p = root.InverseTransformPoint(mf.transform.TransformPoint(c));
+                    min = Vector3.Min(min, p); max = Vector3.Max(max, p); any = true;
+                }
+            }
+            if (!any) return new Vector3(0, 0, 0.3f);
+            return new Vector3((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, max.z);
+        }
+
+        // ------------------------------------------------------------------ VR throws for kunai / yo-yo / disc
+
+        /// <summary>Things that look throwable get thrown for real in VR: squeeze, swing, let go.</summary>
+        static bool VrThrowable(ToolDef t) => t.id == "WarpKunai" || t.id == "SawYoyo" || t.id == "RippleDisc";
+        public static int VrThrows;   // -autotest
+
+        void VrThrowBullet(Hand h, ToolDef t, bool pressed, bool released, float scale)
+        {
+            if (pressed && h.cooldown <= 0) h.throwArmed = true;
+            if (!released || !h.throwArmed) return;
+            h.throwArmed = false;
+            var vr = GetComponent<VRRig>();
+            var v = vr ? (h.isLeft ? vr.Left.velocity : vr.Right.velocity) : Vector3.zero;
+            if (!VrThrowFrom(h, t, v, scale)) return;
+            h.cooldown = t.cooldown;
+            Haptic(h, 0.6f);
+        }
+
+        /// <summary>Fire a projectile tool as a throw: direction from the hand's velocity, speed from how
+        /// hard you threw (35%..125% of the tool's normal speed). A limp release just drops nothing.</summary>
+        bool VrThrowFrom(Hand h, ToolDef t, Vector3 handVel, float scale)
+        {
+            float speed = handVel.magnitude * 1.6f;
+            if (speed < 1.5f * scale) return false;
+            float mul = Mathf.Clamp(speed / Mathf.Max(1f, t.speed * scale), 0.35f, 1.25f);
+            var from = HandT(h).position;
+            var dir = handVel.normalized * mul;   // Bullets reads the length as a speed multiplier
+            int seed = Random.Range(1, int.MaxValue);
+            FxHub.Instance?.FireBullets(t, from, dir, seed, OwnerClientId, IsServer, scale);
+            FireRpc(t.index, from, dir, seed, scale);
+            VrThrows++;
+            return true;
+        }
+
+        /// <summary>-autotest: a VR-style throw from the right hand.</summary>
+        public bool TestVrThrow(string id, Vector3 handVel) => VrThrowFrom(_right, Balance.Tool(id), handVel, _motor.WorldScale);
+
+        [Rpc(SendTo.NotMe)]
+        void KunaiGoneRpc() => FxHub.Instance?.TakeKunai(OwnerClientId, out _);
+
         /// <summary>VR melee: the tool's tip must move fast through a voxel. Real swings, no button.</summary>
         void SwingMelee(Hand h, ToolDef t)
         {
@@ -415,6 +596,7 @@ namespace Cubestruction.Tools
 
         void UpdateVisual(Hand h, int toolIndex)
         {
+            if (!Roles.UsesTools(_avatar.role.Value)) toolIndex = -1;   // giants and commanders hold no tools
             if (h.visualTool == toolIndex) return;
             h.visualTool = toolIndex;
             if (h.visual) Destroy(h.visual);
@@ -423,6 +605,7 @@ namespace Cubestruction.Tools
             var hand = HandT(h);
             var socket = hand.Find("Socket") ?? hand;
             h.visual = ToolVisuals.Create(t.id, socket);
+            h.tipLocal = TipLocal(h.visual);
         }
 
         void Swing(Hand h)
@@ -469,7 +652,7 @@ namespace Cubestruction.Tools
 
         bool ServerCheck(ToolDef t, Vector3 point, float slackM)
         {
-            if (t == null || _avatar.role.Value != PlayerRole.Miner) return false;
+            if (t == null || !Roles.UsesTools(_avatar.role.Value)) return false;
             if (MatchManager.Instance.state.Value != MatchState.Playing) return false;
             if (!_avatar.CanUse(t)) return false;
             float now = Time.time;
@@ -598,6 +781,14 @@ namespace Cubestruction.Tools
                     var muzzle = h.magnetVis.transform.position;
                     var aimPoint = RaycastWorld(ray, 80f, out var hp) ? hp : ray.origin + ray.direction * 80f;
                     var dir = (aimPoint - muzzle).normalized;
+                    if (_avatar.IsVR)
+                    {
+                        // VR: throw the boulder with your arm (a gentle let-go still lobs it where you point)
+                        var vr = GetComponent<VRRig>();
+                        var hv = vr ? (h.isLeft ? vr.Left.velocity : vr.Right.velocity) : Vector3.zero;
+                        if (hv.magnitude > 2f * scale)
+                            dir = hv.normalized * Mathf.Clamp(hv.magnitude * 1.6f / (Balance.Tool("MagnetBoulder").speed * scale), 0.35f, 1.25f);
+                    }
                     int seed = Random.Range(1, int.MaxValue);
                     FxHub.Instance?.FireBullets(Balance.Tool("MagnetBoulder"), muzzle, dir, seed, OwnerClientId, IsServer, scale);
                     MagnetThrowRpc(muzzle, dir, seed, scale);
@@ -662,7 +853,7 @@ namespace Cubestruction.Tools
         void UseStreakRpc(int tool)
         {
             var t = Balance.Tool(tool);
-            if (t == null || t.cat != ToolCategory.Streak || _avatar.role.Value != PlayerRole.Miner) return;
+            if (t == null || t.cat != ToolCategory.Streak || !Roles.CanShop(_avatar.role.Value)) return;
             if (MatchManager.Instance.state.Value != MatchState.Playing) return;
             if (t.id == "HeliGunner" && HeliGunship.Instance != null) { DenyRpc("A chopper is already in the air. Try again when it leaves."); return; }
             bool personal = t.id == "AquaSurge" || t.id == "MeteorDive" || t.id == "SunOrb" || t.id == "TitanBuddy";
@@ -793,7 +984,7 @@ namespace Cubestruction.Tools
         {
             foreach (var pl in PlayerAvatar.All)
             {
-                if (pl == _avatar || pl.role.Value == PlayerRole.God) continue;
+                if (pl == _avatar || Roles.IsGiant(pl.role.Value)) continue;
                 var d = pl.transform.position + Vector3.up * 0.5f - pos;
                 if (d.magnitude > radius) continue;
                 pl.KnockbackRpc((d.normalized + Vector3.up * 0.6f).normalized * knock * (1f - d.magnitude / radius));

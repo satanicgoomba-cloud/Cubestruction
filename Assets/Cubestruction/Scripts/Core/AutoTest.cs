@@ -30,6 +30,44 @@ namespace Cubestruction
         }
 
         void Log(string msg) => Debug.Log("[AutoTest] " + msg);
+
+        /// <summary>A screenshot from an explicit spot (outside views of giants).</summary>
+        static void ShotFrom(string name, Vector3 pos, Vector3 look)
+        {
+            var go = new GameObject("ShotCam");
+            var cam = go.AddComponent<Camera>();
+            go.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look - pos));
+            cam.fieldOfView = 60f; cam.enabled = false;
+            Shot(name, cam);
+            Object.Destroy(go);
+        }
+
+        /// <summary>Saves a screenshot when launched with -shotdir &lt;folder&gt; (to eyeball visuals).</summary>
+        static void Shot(string name, Camera useCam = null)
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            int i = System.Array.IndexOf(args, "-shotdir");
+            if (i < 0 || i + 1 >= args.Length) return;
+            // render the main camera into a texture (the screen-capture module isn't in this build)
+            var cam = useCam ? useCam : Camera.main; if (!cam) return;
+            var rt = new RenderTexture(960, 540, 24);
+            var prev = cam.targetTexture;
+            cam.targetTexture = rt; cam.Render(); cam.targetTexture = prev;
+            var was = RenderTexture.active; RenderTexture.active = rt;
+            var tex = new Texture2D(960, 540, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, 960, 540), 0, 0); tex.Apply();
+            RenderTexture.active = was;
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(args[i + 1], name + ".png"), tex.EncodeToPNG());
+            Object.Destroy(tex); rt.Release(); Object.Destroy(rt);
+        }
+
+        /// <summary>Point the local camera at a world point (yaw on the body, pitch on the head).</summary>
+        static void LookAt(PlayerAvatar me, Vector3 p)
+        {
+            var d = p - me.headAnchor.position;
+            me.transform.rotation = Quaternion.Euler(0, Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg, 0);
+            me.headAnchor.localRotation = Quaternion.Euler(-Mathf.Atan2(d.y, new Vector2(d.x, d.z).magnitude) * Mathf.Rad2Deg, 0, 0);
+        }
         void Check(bool ok, string what) { if (!ok) _failures++; Log((ok ? "PASS " : "FAIL ") + what); }
 
         IEnumerator Start()
@@ -88,39 +126,55 @@ namespace Cubestruction
                 Check(left == 0, $"a cut-off corner block collapses ({27 - left}/27 cells fell)");
             }
 
-            // ---- rope swing: hook the top of the +X face from 5 m out, get lifted, reel in, pump, let go
+            // ---- rope swing: the web goes up to the invisible sky ceiling, a bit ahead of you
             {
                 var tether = Balance.Tool("GrappleHook");
                 me.ownedTools.Value |= 1UL << tether.index;
                 var xFace = cube.Center + Vector3.right * cube.HalfExtent;
                 float baseY = cube.transform.position.y;
-                me.Motor.Teleport(new Vector3(xFace.x + 5f, baseY + 0.2f, xFace.z), 270f);
+                me.Motor.Teleport(new Vector3(xFace.x + 5f, baseY + 0.2f, xFace.z), 90f);
                 yield return new WaitForSeconds(0.5f);
                 float y0 = me.transform.position.y;
-                var target = new Vector3(xFace.x, baseY + cube.HalfExtent * 1.7f, xFace.z);
+                int sky0 = Tools.ToolController.SkyWebs, snap0 = Tools.ToolController.WebsSnapped;
                 var eye = me.headAnchor.position;
-                _swingAim = new Ray(eye, (target - eye).normalized);
+                _swingAim = new Ray(eye, Vector3.right);   // looking out over the meadow; the web goes up and ahead
                 _swing = true;
-                yield return new WaitForSeconds(1.5f);
-                Check(me.Motor.IsGrappling, "Zip Tether attaches to the cube");
+                yield return new WaitForSeconds(0.3f);
+                Check(me.Motor.IsGrappling && Tools.ToolController.SkyWebs > sky0, "Zip Tether webs onto the sky ceiling");
+                var anchor = me.Motor.RopeAnchor;
+                float ceil = Tools.ToolController.SkyCeilingY;
+                Check(Mathf.Abs(anchor.y - ceil) < 0.05f && ceil > baseY + cube.Grid.N * cube.cellSize + 4f,
+                      $"sky anchor sits 20 voxels above the cube (anchor y {anchor.y - baseY:0.0} m, cube top {cube.Grid.N * cube.cellSize:0.0} m)");
+                float ahead = Vector3.ProjectOnPlane(anchor - me.transform.position, Vector3.up).magnitude;
+                Check(ahead > 1f && ahead < 8f, $"anchor is a bit in front, nearly overhead ({ahead:0.0} m ahead)");
+                yield return new WaitForSeconds(0.9f);
                 float lifted = me.transform.position.y - y0;
                 Check(lifted > 1.5f, $"the rope lifts you off the ground ({lifted:0.0} m)");
                 float len0 = me.Motor.RopeLength;
                 _reel = true;
-                yield return new WaitForSeconds(0.8f);
+                yield return new WaitForSeconds(0.5f);
                 _reel = false;
                 Check(me.Motor.RopeLength < len0 - 3f, $"jump reels the rope in ({len0:0.0} -> {me.Motor.RopeLength:0.0} m)");
-                _pump = Vector3.forward;   // pump sideways along the face
+                _pump = Vector3.forward;
                 float best = 0;
-                for (float tt = 0; tt < 2f; tt += Time.deltaTime) { var v = me.Motor.Velocity; best = Mathf.Max(best, new Vector2(v.x, v.z).magnitude); yield return null; }
-                _pump = Vector3.zero;
+                for (float tt = 0; tt < 0.9f; tt += Time.deltaTime) { var v = me.Motor.Velocity; best = Mathf.Max(best, new Vector2(v.x, v.z).magnitude); yield return null; }
                 Check(best > 3f, $"pumping builds a swing ({best:0.0} m/s)");
-                float hang = me.transform.position.y - baseY;
+                // keep holding: the web snaps at 3 s and no new one comes without a fresh press
+                yield return new WaitForSeconds(0.8f);
+                _pump = Vector3.zero;
+                Check(Tools.ToolController.WebsSnapped > snap0 && !me.Motor.IsGrappling, "a web snaps after 3 s");
+                yield return new WaitForSeconds(0.4f);
+                Check(!me.Motor.IsGrappling, "holding on doesn't re-web (no hanging in the sky)");
+                _swing = false;
+                yield return null; yield return null;
+                _swing = true;   // fresh press: a new web, letting go flings you
+                yield return new WaitForSeconds(0.6f);
+                bool rewebbed = me.Motor.IsGrappling;
                 _swing = false;
                 yield return null; yield return null;
                 var fling = me.Motor.Velocity;
-                Check(!me.Motor.IsGrappling && fling.magnitude > 2f, $"letting go flings you ({fling.magnitude:0.0} m/s from {hang:0.0} m up)");
-                yield return new WaitForSeconds(2.5f);
+                Check(rewebbed && !me.Motor.IsGrappling && fling.magnitude > 2f, $"a fresh press webs again; letting go flings you ({fling.magnitude:0.0} m/s)");
+                yield return new WaitForSeconds(3f);
             }
 
             // ---- shop (host writes money directly to set up each case)
@@ -264,9 +318,34 @@ namespace Cubestruction
             {
                 int w0 = Tools.Bullets.Warps;
                 var from = new Vector3(back.x, cube.transform.position.y + 0.2f, back.z - 3f);
-                yield return FireAt("WarpKunai", 0.15f, true, -35f);
+                System.Collections.IEnumerator Tap()
+                {
+                    _holdUse = true; _pulseUse = false;
+                    yield return new WaitForSeconds(0.1f);
+                    _holdUse = false; me.Tools.SetTriggers(false, false);
+                    yield return new WaitForSeconds(0.05f);
+                }
+                yield return FireAt("WarpKunai", 0.1f, false, -35f);
+                Check(Tools.Bullets.Warps == w0, "a stuck kunai doesn't warp you by itself");
+                _pitch = -35f;
+                yield return Tap();   // press again: blink to it
+                _pitch = 0f;
+                yield return new WaitForSeconds(0.3f);
                 float moved = Vector3.Distance(Tools.Bullets.LastWarp, from);
-                Check(Tools.Bullets.Warps > w0 && moved > 2f, $"Warp Kunai teleports you where it sticks ({moved:0.0} m)");
+                Check(Tools.Bullets.Warps > w0 && moved > 2f, $"pressing again warps you to the stuck kunai ({moved:0.0} m)");
+                // mid-flight: throw it along the face into open air, press again before it lands
+                me.Motor.Teleport(new Vector3(back.x, cube.transform.position.y + 0.2f, back.z - 3f), 90f);
+                _aim = Quaternion.Euler(0, 90f, 0); _pitch = -20f;
+                yield return new WaitForSeconds(0.8f);   // kunai cooldown
+                int w1 = Tools.Bullets.Warps;
+                var start = me.transform.position;
+                yield return Tap();
+                yield return new WaitForSeconds(0.3f);
+                yield return Tap();
+                _pitch = 0f; _aim = Quaternion.identity;
+                yield return new WaitForSeconds(0.3f);
+                float air = Vector3.Distance(Tools.Bullets.LastWarp, start);
+                Check(Tools.Bullets.Warps > w1 && air > 5f, $"pressing again mid-flight warps you to the kunai ({air:0.0} m)");
             }
             {
                 int v0 = cube.alive.Value;
@@ -274,10 +353,23 @@ namespace Cubestruction
                 Check(v0 - cube.alive.Value > 5, $"Chain Whip rips chunks out ({v0 - cube.alive.Value} voxels)");
             }
             {
+                // muzzle: shots leave the end of the barrel, not the camera
+                yield return FireAt("Shotgun", 0.15f, true, -10f);
+                var camPos = me.headAnchor.position;
+                var mz = Tools.ToolController.LastMuzzle;
+                var local = me.headAnchor.InverseTransformPoint(mz);
+                Check(local.z > 0.5f && local.y < -0.08f, $"bullets spawn at the barrel end (muzzle {local.x:0.00}, {local.y:0.00}, {local.z:0.00} from the eye)");
                 int v0 = cube.alive.Value, r0 = Tools.Bullets.Returns;
                 yield return FireAt("SawYoyo", 0.15f, true, -10f);
                 yield return new WaitForSeconds(1.5f);
                 Check(v0 - cube.alive.Value > 3 && Tools.Bullets.Returns > r0, $"Saw Yo-yo cuts ({v0 - cube.alive.Value} voxels) and comes back");
+                Check(Tools.Bullets.Strings > 0, "the yo-yo draws its string back to your hand");
+                // VR-style throw: the hand's swing sets direction and speed
+                int vt0 = Tools.ToolController.VrThrows, f0 = Tools.Bullets.Fired;
+                bool limp = me.Tools.TestVrThrow("RippleDisc", Vector3.forward * 0.3f);
+                bool thrown = me.Tools.TestVrThrow("RippleDisc", (Vector3.forward + Vector3.up * 0.2f) * 9f);
+                Check(!limp && thrown && Tools.ToolController.VrThrows == vt0 + 1 && Tools.Bullets.Fired > f0, "VR throws: a real swing throws, a limp release doesn't");
+                yield return new WaitForSeconds(1f);
             }
             {
                 int v0 = cube.alive.Value;
@@ -363,6 +455,20 @@ namespace Cubestruction
                     Check(vy > 10f, $"stepping on a Boing Pad launches you ({vy:0.0} m/s up)");
                     yield return new WaitForSeconds(2.5f);
                 }
+                // thrown into the open (nothing within reach): it lands and stays spring-up, parked
+                me.Motor.Teleport(open, 0f);
+                _aim = Quaternion.identity; _pitch = -10f;
+                yield return new WaitForSeconds(0.4f);
+                int tilt0 = Tools.ExplosiveProjectile.PadsTilted;
+                _holdUse = true; _pulseUse = true;
+                yield return new WaitForSeconds(0.13f);
+                _holdUse = false; _pulseUse = false; _pitch = 0f;
+                yield return new WaitForSeconds(2.5f);
+                Tools.ExplosiveProjectile thrownPad = null;
+                foreach (var e in Tools.ExplosiveProjectile.Live) if (e.IsPad && e != placed) thrownPad = e;
+                bool upright = thrownPad != null && Vector3.Angle(thrownPad.transform.up, Vector3.up) < 2f;
+                bool parked = thrownPad != null && thrownPad.GetComponent<Rigidbody>().isKinematic;
+                Check(upright && parked && Tools.ExplosiveProjectile.PadsTilted == tilt0, $"a thrown Boing Pad lands spring-up and stays put (upright {upright}, parked {parked})");
             }
 
             // ---- loot: there is loot hidden in the cube; break the shallowest one and get paid
@@ -452,9 +558,10 @@ namespace Cubestruction
                 me.charges[st.index] = 1;
                 yield return null;
                 me.Tools.SelectTool(st.index);
-                _holdUse = true; _pulseUse = true;
-                yield return new WaitForSeconds(0.13f);
-                _holdUse = false; _pulseUse = false;
+                yield return null;
+                _holdUse = true; _pulseUse = false;   // one clean press
+                yield return new WaitForSeconds(0.1f);
+                _holdUse = false; me.Tools.SetTriggers(false, false);
                 yield return new WaitForSeconds(0.5f);
             }
             var xFace2 = cube.Center + Vector3.left * cube.HalfExtent;
@@ -581,6 +688,69 @@ namespace Cubestruction
                     Check(hurt && sd.mana.Value < mana0, $"Smite hit the unit (hp {hp0:0} -> {(u != null && u.IsSpawned ? u.hp.Value : 0):0}, mana {mana0:0} -> {sd.mana.Value:0})");
                 }
                 me.role.Value = PlayerRole.God;
+                yield return new WaitForSeconds(0.3f);
+                Check(Siege.SunGodVisual.Built > 0, "the God is a sun with shades and hands");
+                Shot("god_hands");
+                {
+                    var hp = me.headAnchor.position;
+                    ShotFrom("god_outside", hp + me.transform.forward * 14f + Vector3.up * 2f, hp - Vector3.up * 2f);
+                }
+
+                // gestures: grab is free, a thrown bolt and a Sun Wave hit units, a squash kills one
+                sd.mana.Value = 100;
+                for (int k = 0; k < 3; k++) sd.BuyUnitRpc(0, 0);
+                me.role.Value = PlayerRole.Commander; sd.money.Value = 1000;
+                yield return null;
+                for (int k = 0; k < 4; k++) sd.BuyUnitRpc(0, k % 3);
+                yield return new WaitForSeconds(0.6f);
+                me.role.Value = PlayerRole.God;
+                yield return new WaitForSeconds(0.3f);
+                if (Siege.EnemyUnit.Live.Count > 0)
+                {
+                    var target = Siege.EnemyUnit.Live[0];
+                    float mana0 = sd.mana.Value;
+                    sd.GrabRpc(new Unity.Netcode.NetworkObjectReference(target.NetworkObject), false);
+                    yield return new WaitForSeconds(0.2f);
+                    Check(target.state.Value == Siege.UnitState.Held && sd.mana.Value >= mana0 - 0.01f, "grabbing a unit is free");
+                    sd.ReleaseRpc(new Unity.Netcode.NetworkObjectReference(target.NetworkObject), Vector3.up * 3f);
+                    yield return new WaitForSeconds(0.5f);
+
+                    int hits0 = Siege.SiegeDirector.SkillHits;
+                    var u2 = Siege.EnemyUnit.Live.Count > 0 ? Siege.EnemyUnit.Live[Siege.EnemyUnit.Live.Count - 1] : null;
+                    {
+                        // at a unit if one is left, else onto the cube
+                        var at = u2 ? u2.transform.position : cube.Center + Vector3.up * cube.HalfExtent;
+                        var from = at + new Vector3(0, 12f, -10f);
+                        sd.ServerThrowSkill(sd.Skill("SunBomb"), from, Siege.GodController.LobVelocity("SunBomb", from, at));
+                    }
+                    yield return new WaitForSeconds(2f);
+                    Check(Siege.SiegeDirector.SkillHits > hits0, $"a thrown Sun Bomb lands ({Siege.SiegeDirector.SkillHits - hits0} hits)");
+                    int waveHits = Siege.SiegeDirector.SkillHits;
+                    if (Siege.EnemyUnit.Live.Count > 0)
+                    {
+                        var u3 = Siege.EnemyUnit.Live[0];
+                        var o = u3.transform.position + new Vector3(0, 3f, -12f);
+                        sd.ServerSunWave(o, (u3.transform.position + Vector3.up * 0.5f - o).normalized, 1f);
+                    }
+                    yield return new WaitForSeconds(0.3f);
+                    Check(Siege.SiegeDirector.Waves > 0 && Siege.SiegeDirector.SkillHits > waveHits, "the Sun Wave beam hits units in its path");
+                    if (Siege.EnemyUnit.Live.Count > 0)
+                    {
+                        var u4 = Siege.EnemyUnit.Live[0];
+                        var handHome = me.rightHand.localPosition;
+                        me.rightHand.position = u4.transform.position + Vector3.up * 0.5f;
+                        yield return null;
+                        sd.MashRpc(new Unity.Netcode.NetworkObjectReference(u4.NetworkObject));
+                        yield return null;
+                        me.rightHand.localPosition = handHome;
+                        yield return new WaitForSeconds(0.3f);
+                        Check(u4 == null || !u4.IsSpawned, "slamming a hand down squashes a unit");
+                    }
+                    int claps0 = sd.timeSlowLeft.Value > 0 ? 1 : 0;
+                    sd.CastSkillRpc(sd.Skill("TimeSlow").index, Vector3.zero);
+                    yield return new WaitForSeconds(0.2f);
+                    Check(sd.timeSlowLeft.Value > 0, "a clap brings the Lazy Clouds");
+                }
 
                 // a free auto-wave arrives (every 40 s)
                 int w0 = sd.wave.Value;
@@ -597,6 +767,159 @@ namespace Cubestruction
                 mm.ServerEndMatch("autotest");
                 yield return new WaitForSeconds(1f);
                 Check(!sd.IsActive && Siege.EnemyUnit.Live.Count == 0, "ending Siege despawns all units");
+            }
+
+            // ---- Titan Siege, solo, playing the Titan (desktop fallback): bots defend
+            {
+                var td = Siege.TitanDirector.Instance;
+                MatchManager.ForceHumanTitan = true;
+                mm.ServerStartMatch(GameMode.TitanSiege);
+                bool up = false;
+                yield return Wait(() => td.IsActive && VoxelCube.Instance != null && VoxelCube.Instance.Grid != null && me.role.Value == PlayerRole.Titan, 10f, ok => up = ok);
+                Check(up, "Titan Siege started with you as the Titan");
+                var map = VoxelCube.Instance;
+                yield return new WaitForSeconds(1.5f);
+                Check(map.shapeMode.Value == 1 && map.alive.Value > 20000, $"walls + town built ({map.alive.Value} voxels, {map.Grid.N}^3 grid at {map.cellSize} m)");
+                Check(Mathf.Abs(me.transform.localScale.x - Siege.TitanDirector.Scale) < 0.01f, $"you're Titan-sized (x{me.transform.localScale.x:0})");
+                Check(Siege.TitanVisual.Built > 0, "the rigged Titan model is on you");
+                me.Motor.Teleport(me.transform.position, 0f);
+                yield return new WaitForSeconds(0.3f);
+                Shot("titan_firstperson");
+                ShotFrom("titan_outside_idle", me.transform.position + new Vector3(6f, 5f, 12f), me.transform.position + Vector3.up * 3.5f);
+                me.Motor.moveIntent = Vector3.forward;
+                td.prepLeft.Value = 0.05f;
+                _pump = new Vector3(1f, 0f, 0f);
+                yield return new WaitForSeconds(1.2f);
+                ShotFrom("titan_outside_walk", me.transform.position + new Vector3(10f, 4f, 6f), me.transform.position + Vector3.up * 3.5f);
+                _pump = Vector3.zero;
+                td.KickRpc(false);
+                yield return new WaitForSeconds(0.45f);
+                ShotFrom("titan_outside_kick", me.transform.position + new Vector3(10f, 4f, 2f), me.transform.position + Vector3.up * 3f);
+                yield return new WaitForSeconds(1.2f);
+                td.prep.Value = true; td.prepLeft.Value = 30f;
+                Check(td.BotCount == Siege.TitanDirector.MinDefenders, $"bots fill the defenders to 5 v 1 ({td.BotCount} bots)");
+                Check(Siege.TitanDirector.InputLocked(me), "the Titan waits out the prep time");
+                yield return new WaitForSeconds(3f);
+                int loaded = 0; for (int i = 0; i < 4; i++) loaded += Mathf.Max(0, td.ammo[i]);
+                Check(loaded > 0, $"defender bots load the turrets during prep ({loaded} rounds)");
+                td.prepLeft.Value = 0.05f;
+                yield return new WaitForSeconds(0.3f);
+
+                // walk up to wall 1
+                var o = td.Origin;
+                float nearZ = Siege.TitanMap.WallNearZ(o, 0);
+                me.Motor.Teleport(new Vector3(o.x, o.y + 0.2f, nearZ - 2.2f), 0f);
+                yield return new WaitForSeconds(0.4f);
+                int v0 = map.alive.Value, sc0 = Siege.TitanDirector.Scrapes;
+                var wallFace = new Vector3(o.x, o.y + 3f, nearZ + 0.2f);
+                for (int k = 0; k < 6; k++) { td.TitanHitRpc(wallFace + Vector3.right * k * 0.3f, Vector3.right * 0.6f * 7f, 0); yield return new WaitForSeconds(0.07f); }
+                yield return new WaitForSeconds(0.3f);
+                int scraped = v0 - map.alive.Value;
+                Check(Siege.TitanDirector.Scrapes > sc0 && scraped > 0, $"a slow hand scrapes the wall ({scraped} voxels from 6 scrapes, no cooldown)");
+                int v1 = map.alive.Value;
+                td.TitanHitRpc(wallFace + Vector3.up * 1.5f, Vector3.forward * 4.5f * 7f, 1);
+                yield return new WaitForSeconds(0.5f);
+                int punched = v1 - map.alive.Value;
+                Check(punched > scraped, $"a hard punch dents much more ({punched} voxels)");
+                int v2 = map.alive.Value, kicks0 = Siege.TitanDirector.Kicks;
+                td.KickRpc(false);
+                yield return new WaitForSeconds(0.9f);
+                Check(Siege.TitanDirector.Kicks > kicks0 && map.alive.Value < v2, $"a kick smashes the wall ({v2 - map.alive.Value} voxels)");
+                int feet0 = Siege.TitanDirector.Scrapes;
+                _pump = Vector3.forward;
+                yield return new WaitForSeconds(1.2f);
+                _pump = Vector3.zero;
+                Check(Siege.TitanDirector.Scrapes > feet0, $"walking into the wall grinds it with your legs ({Siege.TitanDirector.Scrapes - feet0} scrapes)");
+
+                // the defenders shoot back
+                float hp0 = td.titanHp.Value;
+                int hits0 = Siege.TitanDirector.ShotsHit;
+                td.ammo[0] = 3;
+                td.ServerFireTurret(0);
+                yield return new WaitForSeconds(2.5f);
+                Check(Siege.TitanDirector.ShotsHit > hits0 && td.titanHp.Value < hp0, $"turret shots hit the Titan ({hp0:0} -> {td.titanHp.Value:0} HP, {Siege.TitanDirector.ShotsHit - hits0} hits)");
+                float hp1 = td.titanHp.Value;
+                Tools.Explosion.ServerExplode(Siege.TitanDirector.TitanChest(td.Body), Balance.Tool("RocketLauncher"), 999, false);
+                yield return null;
+                Check(td.titanHp.Value < hp1, $"an RPG hurts the Titan ({hp1:0} -> {td.titanHp.Value:0})");
+                Check(Siege.DefenderBot.RocketsFired + Siege.DefenderBot.TurretShots > 0, $"defender bots fight ({Siege.DefenderBot.RocketsFired} RPGs, {Siege.DefenderBot.TurretShots} turret shots)");
+                int wallVox = map.alive.Value;
+
+                // through the wall: the defenders fall back to wall 2
+                me.Motor.Teleport(new Vector3(o.x, o.y + 0.2f, Siege.TitanMap.WallFarZ(o, 0) + 3f), 0f);
+                yield return new WaitForSeconds(0.5f);
+                Check(td.wall.Value == 1 && td.ammo[0] < 0, "breaking through wall 1 moves the fight to wall 2");
+                Check(map.alive.Value <= wallVox, "player explosions never break the walls");
+
+                // frame time with the Titan, the town and the bots
+                float worst = 0, sum = 0; int frames = 0;
+                for (float tt = 0; tt < 2f; tt += Time.deltaTime) { sum += Time.deltaTime; worst = Mathf.Max(worst, Time.deltaTime); frames++; yield return null; }
+                Log($"Titan Siege frame time: avg {sum / frames * 1000f:0.0} ms, worst {worst * 1000f:0.0} ms, {map.alive.Value} voxels");
+
+                td.titanHp.Value = 0.5f;
+                td.ServerDamageTitan(5f);
+                yield return new WaitForSeconds(0.5f);
+                Check(mm.state.Value == MatchState.Ended && mm.resultText.Value.ToString().Contains("defenders win"), $"bringing the Titan down ends it: \"{mm.resultText.Value}\"");
+                yield return new WaitForSeconds(0.5f);
+                Check(!td.IsActive && td.BotCount == 0, "ending Titan Siege removes the bots");
+            }
+
+            // ---- Titan Siege vs the AI Titan (no headset): you defend with four bots
+            {
+                var td = Siege.TitanDirector.Instance;
+                MatchManager.ForceHumanTitan = false;
+                mm.ServerStartMatch(GameMode.TitanSiege);
+                yield return new WaitForSeconds(1.5f);
+                Check(me.role.Value == PlayerRole.Defender && td.HasAiTitan && td.BotCount == 4, $"AI Titan + you and 4 bots (role {me.role.Value}, bots {td.BotCount})");
+                Check(me.Owns(Balance.Tool("RocketLauncher").index) && me.Owns(Balance.Tool("GrappleHook").index) && me.Owns(Balance.Tool("Jetpack").index), "defenders get an RPG, webs and a jetpack");
+                var map = VoxelCube.Instance;
+                td.prepLeft.Value = 0.05f;
+                int v0 = map.alive.Value;
+                var bot = Siege.TitanBot.Instance;
+                float z0 = bot ? bot.transform.position.z : 0;
+                yield return new WaitForSeconds(5f);
+                if (bot)
+                {
+                    // watch it from the wall top
+                    me.Motor.Teleport(Siege.TitanMap.WallTop(td.Origin, 0, 9f) + Vector3.up * 0.3f, 180f);
+                    for (int f = 0; f < 3; f++) { LookAt(me, bot.transform.position + Vector3.up * 3.5f); yield return null; }
+                    _holdUse = false;
+                    LookAt(me, bot.transform.position + Vector3.up * 3.5f); Shot("ai_titan_walk");
+                    yield return new WaitForSeconds(4f);
+                    LookAt(me, bot.transform.position + Vector3.up * 3.5f); Shot("ai_titan_wall");
+                }
+                yield return new WaitForSeconds(3f);
+                float z1 = bot ? bot.transform.position.z : 0;
+                Check(z1 > z0 + 5f, $"the AI Titan marches on the wall ({z0:0} -> {z1:0} m)");
+                Check(map.alive.Value < v0 && Siege.TitanBot.Punches > 0, $"the AI Titan smashes the wall ({v0 - map.alive.Value} voxels, {Siege.TitanBot.Punches} punches)");
+                // standing at a turret loads it
+                // the turret on the far side from where the Titan is punching
+                int t = td.wall.Value * 4 + (bot && bot.transform.position.x > td.Origin.x ? 0 : 3);
+                me.Motor.Teleport(td.TurretPos(t) + Vector3.right * 0.8f + Vector3.up * 0.3f, 180f);
+                int a0 = Mathf.Max(0, td.ammo[t]), fired0 = Siege.TitanDirector.ShotsFired;
+                yield return new WaitForSeconds(3f);
+                // (a bot on the same turret fires each round as soon as it's loaded)
+                Check(td.ammo[t] > a0 || Siege.TitanDirector.ShotsFired > fired0, $"standing at a turret loads it (ammo {a0} -> {td.ammo[t]}, {Siege.TitanDirector.ShotsFired - fired0} shots)");
+                Log($"AI Titan after ~16 s: {td.titanHp.Value:0}/{td.titanMaxHp.Value:0} HP, wall {td.wall.Value + 1}, {Siege.DefenderBot.TurretShots} bot turret shots, {Siege.DefenderBot.RocketsFired} bot RPGs");
+                Check(Siege.DefenderController.NearTurret == t, "the HUD knows which turret you're at");
+                mm.ServerEndMatch("autotest");
+                yield return new WaitForSeconds(1f);
+            }
+
+            // ---- hotbar: two rows of 8 at most, pinned picks first
+            {
+                mm.RequestLobbyRpc();
+                yield return new WaitForSeconds(0.5f);
+                foreach (var t in Balance.Tools) if (!t.consumable && t.cat != ToolCategory.Hidden && t.cat != ToolCategory.Streak) me.ownedTools.Value |= 1UL << t.index;
+                yield return null;
+                var pins = GameSettings.HotbarPins;
+                GameSettings.HotbarPins = "";
+                int usable = me.Tools.Usable().Count, bar = me.Tools.Hotbar().Count;
+                Check(usable > 16 && bar == 16, $"the hotbar holds 16 of your {usable} tools");
+                GameSettings.HotbarPins = "SonicHammer,RailGun";
+                var hb = me.Tools.Hotbar();
+                Check(hb.Exists(t => t.id == "SonicHammer") && hb.Exists(t => t.id == "RailGun"), "pinned tools are on the hotbar");
+                GameSettings.HotbarPins = pins;
             }
 
             Check(VoxelCube.MissedIslandCells == 0, $"local island check matched the full flood fill (missed {VoxelCube.MissedIslandCells} cells)");

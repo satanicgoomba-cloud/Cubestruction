@@ -1,5 +1,5 @@
 {
-  "notes": "God Siege mode. The Commander (PC/Mac/Mobile) earns money over time and sends units at the God's (VR) cube; the God defends. Commander wins by destroying every Core voxel. God wins by surviving until the timer runs out. Tuned with Tools/balance_sim.py siege.",
+  "notes": "God Siege (Age of War). The God (VR, a giant sun with hands) defends the cube. Everyone else votes in the lobby: Raiders run in with tools to dig at the cube; one Minion Caster (picked at random from those who volunteered) earns money and sends unit waves. Raiders + Caster win by destroying every Core voxel; the God wins by surviving until the timer runs out. The God's skills are gestures: throw them (trigger), push a charged Sun Wave from both hands, clap for Lazy Clouds, grab anything with grip. Tuned with Tools/balance_sim.py siege.",
   "cubeSize": 24,
   "matchSeconds": 900,
   "commander": {
@@ -8,7 +8,12 @@
     "incomePerEra": 6,
     "xpPerMoneySpent": 1.0,
     "xpPerVoxel": 0.5,
-    "eraXp": [0, 600, 2200, 5500],
+    "eraXp": [
+      0,
+      600,
+      2200,
+      5500
+    ],
     "autoWaveInterval": 40,
     "autoWaveBaseBudget": 60,
     "autoWaveGrowth": 1.18
@@ -21,22 +26,203 @@
     "handSlapCooldown": 0.6,
     "throwDamagePerMps": 6,
     "grabMaxSeconds": 4.0,
-    "scale": 8.0
+    "scale": 8.0,
+    "manaRegenPerRaider": 0.15
   },
   "skills": [
-    { "id": "Grab",    "name": "Divine Grip",   "mana": 12, "cooldown": 2.5,  "damage": 0,   "radiusM": 0,   "duration": 4,  "desc": "Grab any unit (heavier units cost more mana) and throw it like a ragdoll." },
-    { "id": "Smite",   "name": "Sky Zap",       "mana": 25, "cooldown": 4,    "damage": 120, "radiusM": 2.5, "duration": 0,  "desc": "Lightning strike where you point." },
-    { "id": "Shield",  "name": "Bubble Ward",   "mana": 45, "cooldown": 20,   "damage": 0,   "radiusM": 4,   "duration": 8,  "desc": "A glass bubble that blocks all voxel damage inside it." },
-    { "id": "Regrow",  "name": "Spring Bloom",  "mana": 40, "cooldown": 15,   "damage": 0,   "radiusM": 3,   "duration": 0,  "desc": "Regrows up to 60 missing outer voxels (never Core)." },
-    { "id": "Meteor",  "name": "Comet Drop",    "mana": 80, "cooldown": 30,   "damage": 450, "radiusM": 5,   "duration": 0,  "desc": "Calls down a comet. Huge area damage to units (not your cube)." },
-    { "id": "TimeSlow","name": "Lazy Clouds",   "mana": 55, "cooldown": 35,   "damage": 0,   "radiusM": 0,   "duration": 6,  "desc": "All enemy units move and attack at 40% speed." }
+    {
+      "id": "Grab",
+      "name": "Divine Grip",
+      "mana": 0,
+      "cooldown": 0,
+      "damage": 0,
+      "radiusM": 0,
+      "duration": 4,
+      "desc": "Grip near anything (units or Raiders) to pick it up; let go to throw it. Swat with an open hand; slam down to squash."
+    },
+    {
+      "id": "Smite",
+      "name": "Zeus Bolt",
+      "mana": 20,
+      "cooldown": 1.2,
+      "damage": 120,
+      "radiusM": 2.5,
+      "duration": 0,
+      "desc": "Throw a lightning bolt: it strikes where it lands."
+    },
+    {
+      "id": "SunBomb",
+      "name": "Sun Bomb",
+      "mana": 30,
+      "cooldown": 3,
+      "damage": 220,
+      "radiusM": 4,
+      "duration": 0,
+      "desc": "Throw a little sun that bursts on impact and sends everyone flying."
+    },
+    {
+      "id": "BladeHail",
+      "name": "Hail of Blades",
+      "mana": 35,
+      "cooldown": 5,
+      "damage": 70,
+      "radiusM": 0.8,
+      "duration": 0,
+      "desc": "Fling a fan of ten glowing blades that cut through units."
+    },
+    {
+      "id": "SunWave",
+      "name": "Sun Wave",
+      "mana": 50,
+      "cooldown": 10,
+      "damage": 320,
+      "radiusM": 2,
+      "duration": 0,
+      "desc": "Hands together, hold both triggers to charge, push forward to fire a beam of sunlight."
+    },
+    {
+      "id": "Shield",
+      "name": "Bubble Ward",
+      "mana": 45,
+      "cooldown": 20,
+      "damage": 0,
+      "radiusM": 4,
+      "duration": 8,
+      "desc": "Throw a bubble: where it lands, a glass ward blocks all voxel damage."
+    },
+    {
+      "id": "Regrow",
+      "name": "Spring Bloom",
+      "mana": 40,
+      "cooldown": 15,
+      "damage": 0,
+      "radiusM": 3,
+      "duration": 0,
+      "desc": "Throw a seed: missing outer voxels regrow where it lands (never Core)."
+    },
+    {
+      "id": "Meteor",
+      "name": "Comet Drop",
+      "mana": 80,
+      "cooldown": 30,
+      "damage": 450,
+      "radiusM": 5,
+      "duration": 0,
+      "desc": "Throw a comet. Huge area damage to units (not your cube)."
+    },
+    {
+      "id": "TimeSlow",
+      "name": "Lazy Clouds",
+      "mana": 55,
+      "cooldown": 35,
+      "damage": 0,
+      "radiusM": 0,
+      "duration": 6,
+      "desc": "Clap your hands: all enemy units move and attack at 40% speed."
+    }
   ],
   "units": [
-    { "id": "SmileyScrapper", "name": "Smiley Scrapper", "era": 1, "cost": 15,   "hp": 40,   "speed": 2.2, "mass": 1,  "attack": "Melee",  "voxelDamage": 8,   "attackRadiusCells": 1.0, "attackCooldown": 0.7, "rangeM": 0.6, "tier": 2, "grabbable": true,  "desc": "Cheap swarmer that chips the crust." },
-    { "id": "WinkBomber",     "name": "Wink Bomber",     "era": 1, "cost": 40,   "hp": 25,   "speed": 3.2, "mass": 1,  "attack": "Explode","voxelDamage": 70,  "attackRadiusCells": 2.5, "attackCooldown": 0,   "rangeM": 0.6, "tier": 3, "grabbable": true,  "desc": "Runs at the cube and pops. Throw it back at its friends." },
-    { "id": "PixelArcher",    "name": "Pixel Archer",    "era": 2, "cost": 60,   "hp": 55,   "speed": 2.0, "mass": 1,  "attack": "Ranged", "voxelDamage": 14,  "attackRadiusCells": 1.0, "attackCooldown": 0.9, "rangeM": 9,   "tier": 3, "grabbable": true,  "desc": "Shoots the cube from range." },
-    { "id": "BlockBrute",     "name": "Block Brute",     "era": 2, "cost": 140,  "hp": 300,  "speed": 1.4, "mass": 3,  "attack": "Melee",  "voxelDamage": 30,  "attackRadiusCells": 1.6, "attackCooldown": 0.9, "rangeM": 0.8, "tier": 4, "grabbable": true,  "desc": "Tanky smasher. Costs triple mana to grab." },
-    { "id": "CannonCart",     "name": "Cannon Cart",     "era": 3, "cost": 300,  "hp": 320,  "speed": 1.1, "mass": 4,  "attack": "Siege",  "voxelDamage": 110, "attackRadiusCells": 3.0, "attackCooldown": 4.0, "rangeM": 14,  "tier": 4, "grabbable": true,  "desc": "Lobs explosive shells from long range." },
-    { "id": "MegaBuddy",      "name": "Mega Buddy",      "era": 4, "cost": 1400, "hp": 2600, "speed": 0.9, "mass": 10, "attack": "Melee",  "voxelDamage": 120, "attackRadiusCells": 2.6, "attackCooldown": 1.2, "rangeM": 1.4, "tier": 5, "grabbable": false, "desc": "Boss. Can only be grabbed below 30% HP." }
+    {
+      "id": "SmileyScrapper",
+      "name": "Smiley Scrapper",
+      "era": 1,
+      "cost": 15,
+      "hp": 40,
+      "speed": 2.2,
+      "mass": 1,
+      "attack": "Melee",
+      "voxelDamage": 8,
+      "attackRadiusCells": 1.0,
+      "attackCooldown": 0.7,
+      "rangeM": 0.6,
+      "tier": 2,
+      "grabbable": true,
+      "desc": "Cheap swarmer that chips the crust."
+    },
+    {
+      "id": "WinkBomber",
+      "name": "Wink Bomber",
+      "era": 1,
+      "cost": 40,
+      "hp": 25,
+      "speed": 3.2,
+      "mass": 1,
+      "attack": "Explode",
+      "voxelDamage": 70,
+      "attackRadiusCells": 2.5,
+      "attackCooldown": 0,
+      "rangeM": 0.6,
+      "tier": 3,
+      "grabbable": true,
+      "desc": "Runs at the cube and pops. Throw it back at its friends."
+    },
+    {
+      "id": "PixelArcher",
+      "name": "Pixel Archer",
+      "era": 2,
+      "cost": 60,
+      "hp": 55,
+      "speed": 2.0,
+      "mass": 1,
+      "attack": "Ranged",
+      "voxelDamage": 14,
+      "attackRadiusCells": 1.0,
+      "attackCooldown": 0.9,
+      "rangeM": 9,
+      "tier": 3,
+      "grabbable": true,
+      "desc": "Shoots the cube from range."
+    },
+    {
+      "id": "BlockBrute",
+      "name": "Block Brute",
+      "era": 2,
+      "cost": 140,
+      "hp": 300,
+      "speed": 1.4,
+      "mass": 3,
+      "attack": "Melee",
+      "voxelDamage": 30,
+      "attackRadiusCells": 1.6,
+      "attackCooldown": 0.9,
+      "rangeM": 0.8,
+      "tier": 4,
+      "grabbable": true,
+      "desc": "Tanky smasher. Costs triple mana to grab."
+    },
+    {
+      "id": "CannonCart",
+      "name": "Cannon Cart",
+      "era": 3,
+      "cost": 300,
+      "hp": 320,
+      "speed": 1.1,
+      "mass": 4,
+      "attack": "Siege",
+      "voxelDamage": 110,
+      "attackRadiusCells": 3.0,
+      "attackCooldown": 4.0,
+      "rangeM": 14,
+      "tier": 4,
+      "grabbable": true,
+      "desc": "Lobs explosive shells from long range."
+    },
+    {
+      "id": "MegaBuddy",
+      "name": "Mega Buddy",
+      "era": 4,
+      "cost": 1400,
+      "hp": 2600,
+      "speed": 0.9,
+      "mass": 10,
+      "attack": "Melee",
+      "voxelDamage": 120,
+      "attackRadiusCells": 2.6,
+      "attackCooldown": 1.2,
+      "rangeM": 1.4,
+      "tier": 5,
+      "grabbable": false,
+      "desc": "Boss. Can only be grabbed below 30% HP."
+    }
   ]
 }
