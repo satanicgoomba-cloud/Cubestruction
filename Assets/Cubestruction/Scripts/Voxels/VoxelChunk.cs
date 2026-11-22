@@ -68,7 +68,13 @@ namespace Cubestruction.Voxels
                 float j = 0.9f + 0.1f * Hash(x, y, z);
                 Color c = L.unityColor * j; c.a = 1;
                 float glow = L.glow;
-                if (_cube.IsLoot(idx)) { c = Loot.Gold * (0.95f + 0.1f * Hash(x, y, z)); c.a = 1; glow = 0.9f; }   // loot shines gold
+                switch (_cube.MarkOf(idx))
+                {
+                    case CellMark.Loot: c = Loot.Gold * (0.95f + 0.1f * Hash(x, y, z)); glow = 0.9f; break;               // shines gold
+                    case CellMark.Glass: c = new Color(0.78f, 0.95f, 1f) * (0.92f + 0.08f * Hash(x, y, z)); glow = 0.45f; break; // frozen
+                    case CellMark.Goo: c = new Color(1f, 0.42f, 0.78f) * (0.95f + 0.05f * Hash(x, y, z)); glow = 0.5f; break;   // bouncy
+                }
+                c.a = 1;
                 Color32 c32 = c;
                 // cube local space: origin at bottom centre
                 var centre = new Vector3((x - n * 0.5f + 0.5f) * s, (y + 0.5f) * s, (z - n * 0.5f + 0.5f) * s);

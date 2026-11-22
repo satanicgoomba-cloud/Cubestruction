@@ -185,6 +185,29 @@ namespace Cubestruction.Player
             JetFuel = Mathf.Min(MaxJetFuel, JetFuel + dt);
         }
 
+        // ---- Boing Goo: goo-coated voxels are trampolines
+        float _gooReady;
+        public static int GooBounces;   // -autotest counter
+
+        void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if (Time.time < _gooReady) return;
+            var cube = VoxelCube.Instance;
+            if (!cube || cube.GooCount == 0 || hit.collider.GetComponentInParent<VoxelChunk>() == null) return;
+            var c = cube.WorldToCellInt(hit.point - hit.normal * cube.cellSize * 0.5f);
+            if (!cube.Grid.InBounds(c.x, c.y, c.z) || cube.MarkOf(cube.Grid.Index(c.x, c.y, c.z)) != CellMark.Goo) return;
+            var n = hit.normal;
+            float into = Vector3.Dot(Velocity, n);
+            var v = into < 0 ? Velocity - 2f * into * n : Velocity;   // reflect off the goo...
+            float outSpeed = Vector3.Dot(v, n);
+            float want = 11f * WorldScale;
+            if (outSpeed < want) v += n * (want - outSpeed);       // ...with at least a trampoline's kick
+            Velocity = v;
+            Grounded = false;
+            _gooReady = Time.time + 0.15f;
+            GooBounces++;
+        }
+
         void FallCheck()
         {
             // fell off the arena (the meadow is 12 m down): respawn on the pedestal edge

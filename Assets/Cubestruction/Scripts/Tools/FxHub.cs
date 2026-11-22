@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Cubestruction.Player;
 using Unity.Netcode;
 using UnityEngine;
@@ -41,6 +42,32 @@ namespace Cubestruction.Tools
             if (NetworkManager.LocalClientId == owner) return;
             var t = Balance.Tool(tool);
             if (t != null) FireBullets(t, origin, dir, seed, owner, false, scale);
+        }
+
+        public static int LightningBolts;   // -autotest counter
+
+        /// <summary>Chain Zapper bolt through the voxels it hit (everyone, including the shooter).</summary>
+        [Rpc(SendTo.ClientsAndHost)]
+        public void LightningRpc(Vector3[] points)
+        {
+            if (points == null || points.Length < 2) return;
+            LightningBolts++;
+            var go = new GameObject("Lightning");
+            var lr = go.AddComponent<LineRenderer>();
+            lr.material = glowMaterial;
+            var pts = new List<Vector3>();
+            for (int i = 0; i < points.Length - 1; i++)
+            {
+                var a = points[i]; var b = points[i + 1];
+                for (int k = 0; k < 4; k++) pts.Add(Vector3.Lerp(a, b, k / 4f) + (k == 0 ? Vector3.zero : Random.insideUnitSphere * 0.12f));
+                Burst(b, 4, new Color(0.7f, 0.9f, 1f));
+            }
+            pts.Add(points[points.Length - 1]);
+            lr.positionCount = pts.Count; lr.SetPositions(pts.ToArray());
+            lr.widthMultiplier = 0.06f;
+            lr.startColor = new Color(0.85f, 0.95f, 1f); lr.endColor = new Color(0.55f, 0.75f, 1f);
+            StartCoroutine(Fade(lr, 0.18f));
+            Play(zapClip, points[1], 0.7f, Random.Range(0.8f, 1.1f));
         }
 
         /// <summary>Local-only blast (bomblets): every peer pops its own copy, so no RPC.</summary>

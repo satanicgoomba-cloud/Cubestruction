@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace Cubestruction.Voxels
 {
+    public enum CellMark : byte { None = 0, Loot = 1, Glass = 2, Goo = 3 }
+
     /// <summary>
     /// The networked cube. The server owns HP and decides what is destroyed; clients only
     /// receive lists of destroyed cell indices and rebuild their chunk meshes.
@@ -42,16 +44,25 @@ namespace Cubestruction.Voxels
         float _islandCheckAt = -1;
         ulong _lastInstigator;
 
-        /// <summary>Loot voxels (cell indices). Server writes; everyone renders them gold.</summary>
-        public NetworkList<int> loot;
-        readonly HashSet<int> _lootSet = new HashSet<int>();
+        /// <summary>Marked voxels, encoded idx * 4 + (int)CellMark: loot (gold), glass (frozen by the Frost
+        /// Ray: shatters in one hit) and goo (Boing Goo: bounces players). Server writes; everyone renders them.</summary>
+        public NetworkList<int> marks;
+        readonly Dictionary<int, CellMark> _marks = new Dictionary<int, CellMark>();
+        readonly Queue<int> _gooOrder = new Queue<int>(), _glassOrder = new Queue<int>();
+        int _lootCount, _gooCount, _glassCount;
         bool _wantLoot;
-        public bool IsLoot(int idx) => _lootSet.Contains(idx);
-        public int LootCount => _lootSet.Count;
+        public const int MaxGoo = 3000, MaxGlass = 6000;
+
+        public CellMark MarkOf(int idx) => _marks.TryGetValue(idx, out var m) ? m : CellMark.None;
+        public bool IsLoot(int idx) => MarkOf(idx) == CellMark.Loot;
+        public int LootCount => _lootCount;
+        public int GooCount => _gooCount;
+        public int GlassCount => _glassCount;
+        public IEnumerable<int> CellsMarked(CellMark m) { foreach (var kv in _marks) if (kv.Value == m) yield return kv.Key; }
         /// <summary>Server, before Spawn: hide loot in this cube (Mining).</summary>
         public void ServerEnableLoot() => _wantLoot = true;
 
-        void Awake() { Instance = this; loot = new NetworkList<int>(); }
+        void Awake() { Instance = this; marks = new NetworkList<int>(); }
         public override void OnDestroy() { if (Instance == this) Instance = null; base.OnDestroy(); }
 
         // ------------------------------------------------------------------ lifecycle
@@ -68,9 +79,8 @@ namespace Cubestruction.Voxels
         public override void OnNetworkSpawn()
         {
             Build();
-            loot.OnListChanged += OnLootChanged;
-            foreach (var i in loot) _lootSet.Add(i);
-            foreach (var i in _lootSet) MarkCellDirty(i);
+            marks.OnListChanged += OnMarksChanged;
+            RebuildMarks();
             if (IsServer)
             {
                 alive.Value = Grid.Alive;
@@ -230,25 +240,132 @@ namespace Cubestruction.Voxels
             {
                 int idx = rng.Next(total);
                 int li = Grid.layer[idx];
-                if (li >= want.Length || want[li] <= 0 || _lootSet.Contains(idx)) continue;
+                if (li >= want.Length || want[li] <= 0 || MarkOf(idx) != CellMark.None) continue;
                 want[li]--;
-                loot.Add(idx);
+                ServerMark(idx, CellMark.Loot);
                 bool done = true; foreach (var w in want) if (w > 0) { done = false; break; }
                 if (done) break;
             }
         }
 
-        void OnLootChanged(NetworkListEvent<int> e)
+        /// <summary>Server: mark a solid cell. Loot is never overwritten.</summary>
+        public void ServerMark(int idx, CellMark m)
         {
+            if (!IsServer || idx < 0 || idx >= Grid.solid.Length || !Grid.solid[idx]) return;
+            var cur = MarkOf(idx);
+            if (cur == m || cur == CellMark.Loot) return;
+            if (cur != CellMark.None) marks.Remove(idx * 4 + (int)cur);
+            marks.Add(idx * 4 + (int)m);
+            if (m == CellMark.Goo) { _gooOrder.Enqueue(idx); while (_gooCount > MaxGoo && _gooOrder.Count > 0) { int o = _gooOrder.Dequeue(); if (MarkOf(o) == CellMark.Goo) ServerUnmark(o); } }
+            if (m == CellMark.Glass) { _glassOrder.Enqueue(idx); while (_glassCount > MaxGlass && _glassOrder.Count > 0) { int o = _glassOrder.Dequeue(); if (MarkOf(o) == CellMark.Glass) ServerUnmark(o); } }
+        }
+
+        public void ServerUnmark(int idx)
+        {
+            var cur = MarkOf(idx);
+            if (IsServer && cur != CellMark.None) marks.Remove(idx * 4 + (int)cur);
+        }
+
+        void OnMarksChanged(NetworkListEvent<int> e)
+        {
+            int idx = e.Value >> 2; var m = (CellMark)(e.Value & 3);
             switch (e.Type)
             {
-                case NetworkListEvent<int>.EventType.Add: _lootSet.Add(e.Value); MarkCellDirty(e.Value); break;
-                case NetworkListEvent<int>.EventType.Remove:
-                case NetworkListEvent<int>.EventType.RemoveAt: _lootSet.Remove(e.Value); break;
-                default:
-                    _lootSet.Clear(); foreach (var i in loot) _lootSet.Add(i);
+                case NetworkListEvent<int>.EventType.Add:
+                    if (_marks.TryGetValue(idx, out var old)) Count(old, -1);
+                    _marks[idx] = m; Count(m, +1); MarkCellDirty(idx);
                     break;
+                case NetworkListEvent<int>.EventType.Remove:
+                case NetworkListEvent<int>.EventType.RemoveAt:
+                    if (_marks.TryGetValue(idx, out var cur) && cur == m) { _marks.Remove(idx); Count(m, -1); MarkCellDirty(idx); }
+                    break;
+                default: RebuildMarks(); break;
             }
+        }
+
+        void RebuildMarks()
+        {
+            foreach (var k in _marks.Keys) MarkCellDirty(k);
+            _marks.Clear(); _lootCount = _gooCount = _glassCount = 0;
+            foreach (var v in marks) { var m = (CellMark)(v & 3); _marks[v >> 2] = m; Count(m, +1); MarkCellDirty(v >> 2); }
+        }
+
+        void Count(CellMark m, int d)
+        {
+            if (m == CellMark.Loot) _lootCount += d; else if (m == CellMark.Goo) _gooCount += d; else if (m == CellMark.Glass) _glassCount += d;
+        }
+
+        // ------------------------------------------------------------------ special weapons (server)
+
+        /// <summary>Frost Ray: turn voxels in a sphere (up to maxTier) into glass that shatters in one hit.</summary>
+        public void ServerFreezeRay(Ray worldRay, float range, float radiusCells, int maxTier)
+        {
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out _)) return;
+            var L = Balance.Layers.layers;
+            foreach (int idx in CellsInSphere(cell, radiusCells))
+            {
+                if (L[Grid.layer[idx]].tier > maxTier) continue;
+                Grid.hp[idx] = Mathf.Min(Grid.hp[idx], 0.05f);
+                ServerMark(idx, CellMark.Glass);
+            }
+        }
+
+        /// <summary>Boing Goo: coat the exposed voxels around a cell with bouncy goo.</summary>
+        public void ServerGoo(Vector3Int cell, float radiusCells)
+        {
+            if (!IsServer) return;
+            foreach (int idx in CellsInSphere(cell, radiusCells))
+                if (Exposed(idx)) ServerMark(idx, CellMark.Goo);
+        }
+
+        /// <summary>Chain Zapper: zap the voxel the ray hits, then arc to up to <paramref name="jumps"/> more
+        /// exposed voxels within range. Appends the bolt's world points to <paramref name="path"/>.</summary>
+        public int ServerChain(Ray worldRay, float range, ToolDef t, ulong instigator, List<Vector3> path)
+        {
+            if (!IsServer || !Raycast(worldRay, range, out var cell, out var p)) return 0;
+            path.Add(p);
+            _killed.Clear();
+            var hit = new HashSet<int>();
+            var cur = cell;
+            int r = Mathf.CeilToInt(t.chainRangeCells);
+            for (int j = 0; j <= t.chainJumps; j++)
+            {
+                hit.Add(Grid.Index(cur.x, cur.y, cur.z));
+                Grid.ApplySphere(new Vector3(cur.x, cur.y, cur.z), t.radiusCells, t.damage, t.tier, false, _killed, DamageFilter);
+                path.Add(CellToWorld(cur));
+                bool found = false;
+                for (int k = 0; k < 80 && !found; k++)
+                {
+                    var c = cur + new Vector3Int(UnityEngine.Random.Range(-r, r + 1), UnityEngine.Random.Range(-r, r + 1), UnityEngine.Random.Range(-r, r + 1));
+                    if (!Grid.IsSolid(c) || (c - cur).sqrMagnitude > t.chainRangeCells * t.chainRangeCells || (c - cur).sqrMagnitude < 4) continue;
+                    int ci = Grid.Index(c.x, c.y, c.z);
+                    if (hit.Contains(ci) || !Exposed(ci)) continue;
+                    cur = c; found = true;
+                }
+                if (!found) break;
+            }
+            return FinishKills(instigator);
+        }
+
+        IEnumerable<int> CellsInSphere(Vector3Int c, float radius)
+        {
+            int r = Mathf.CeilToInt(radius);
+            for (int x = c.x - r; x <= c.x + r; x++)
+            for (int y = c.y - r; y <= c.y + r; y++)
+            for (int z = c.z - r; z <= c.z + r; z++)
+            {
+                if (!Grid.IsSolid(x, y, z)) continue;
+                if ((new Vector3(x, y, z) - c).sqrMagnitude > radius * radius) continue;
+                yield return Grid.Index(x, y, z);
+            }
+        }
+
+        /// <summary>A solid cell with at least one open face.</summary>
+        public bool Exposed(int idx)
+        {
+            var c = Grid.Coord(idx);
+            return !Grid.IsSolid(c.x + 1, c.y, c.z) || !Grid.IsSolid(c.x - 1, c.y, c.z) || !Grid.IsSolid(c.x, c.y + 1, c.z) ||
+                   !Grid.IsSolid(c.x, c.y - 1, c.z) || !Grid.IsSolid(c.x, c.y, c.z + 1) || !Grid.IsSolid(c.x, c.y, c.z - 1);
         }
 
         void MarkCellDirty(int idx)
@@ -260,13 +377,14 @@ namespace Cubestruction.Voxels
 
         int Broadcast(ulong instigator)
         {
-            if (_lootSet.Count > 0)
+            if (_marks.Count > 0)
                 foreach (var idx in _killed)
-                    if (_lootSet.Remove(idx))
-                    {
-                        loot.Remove(idx);
-                        Loot.ServerGrant(instigator, Grid.layer[idx], CellToWorld(Grid.Coord(idx)));
-                    }
+                {
+                    var m = MarkOf(idx);
+                    if (m == CellMark.None) continue;
+                    ServerUnmark(idx);
+                    if (m == CellMark.Loot) Loot.ServerGrant(instigator, Grid.layer[idx], CellToWorld(Grid.Coord(idx)));
+                }
             int money = 0;
             foreach (var idx in _killed) money += Grid.LayerOf(idx).value;
             money = Mathf.RoundToInt(money * valueScale.Value);

@@ -252,7 +252,7 @@ namespace Cubestruction.Tools
                     bool on = h.trigger;
                     Vector3 end = ray.origin + ray.direction * t.rangeM;
                     if (on && RaycastWorld(ray, t.rangeM, out var p)) end = p;
-                    SetLine(h, on, ray.origin, end, t.id == "PlasmaCutter" ? new Color(1f, 0.5f, 0.9f) : AeroPalette.Aqua);
+                    SetLine(h, on, ray.origin, end, t.id == "PlasmaCutter" ? new Color(1f, 0.5f, 0.9f) : t.freezes ? new Color(0.75f, 0.95f, 1f) : AeroPalette.Aqua);
                     if (on && h.cooldown <= 0) { RayRpc(t.index, ray.origin, ray.direction, 0); h.cooldown = Mathf.Max(t.cooldown, 0.1f); Haptic(h, 0.1f); }
                     break;
                 }
@@ -277,7 +277,8 @@ namespace Cubestruction.Tools
                     else
                     {
                         RayRpc(t.index, ray.origin, ray.direction, Random.Range(1, int.MaxValue));
-                        FxHub.Instance?.LocalTracer(ray.origin, RaycastWorld(ray, t.rangeM, out var p) ? p : ray.origin + ray.direction * t.rangeM, t);
+                        if (t.chainJumps <= 0)   // the zapper's bolt comes back from the server
+                            FxHub.Instance?.LocalTracer(ray.origin, RaycastWorld(ray, t.rangeM, out var p) ? p : ray.origin + ray.direction * t.rangeM, t);
                     }
                     if (t.selfRecoil > 0) _motor.AddImpulse(-ray.direction * t.selfRecoil * scale);   // Boost Blaster: fly
                     else if (t.knockback > 0 && !_avatar.IsVR) _motor.AddImpulse(-ray.direction * t.knockback * 0.15f);   // recoil
@@ -455,6 +456,15 @@ namespace Cubestruction.Tools
             var t = Balance.Tool(tool);
             if (!ServerCheck(t, origin, 0) || (t.cat != ToolCategory.Beam && t.cat != ToolCategory.Gun)) return;
             var cube = VoxelCube.Instance; if (!cube) return;
+            float reachM = t.rangeM * _motor.WorldScale;
+            if (t.freezes) { cube.ServerFreezeRay(new Ray(origin, dir), reachM, t.radiusCells, t.tier); return; }
+            if (t.chainJumps > 0)
+            {
+                var path = new List<Vector3> { origin };
+                cube.ServerChain(new Ray(origin, dir), reachM, t, OwnerClientId, path);
+                if (path.Count > 1) FxHub.Instance.LightningRpc(path.ToArray());
+                return;
+            }
             var rng = new System.Random(seed);
             int pellets = Mathf.Max(1, t.pellets);
             for (int i = 0; i < pellets; i++)

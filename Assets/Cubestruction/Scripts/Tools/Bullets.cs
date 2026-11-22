@@ -19,7 +19,8 @@ namespace Cubestruction.Tools
             public ToolDef def;
             public Vector3 pos, vel;
             public int bouncesLeft, pierceLeft;
-            public float life, scale;
+            public float life, scale, age;
+            public float burrowLeft, digAt; public bool burrowing;
             public System.Random rng;     // per-bullet, seeded from the volley: splits match on every peer
             public ulong owner;
             public bool authority;
@@ -87,6 +88,12 @@ namespace Cubestruction.Tools
                     alive = Step(b, step, cube);
                 }
                 b.life -= dt;
+                b.age += dt;
+                if (alive && b.def.splitAfterS > 0 && b.age >= b.def.splitAfterS && !b.burrowing)
+                {
+                    Split(b, b.pos, Vector3.zero);   // fireworks: burst in the air
+                    alive = false;
+                }
                 if (!alive || b.life <= 0 || b.pos.y < -20f)
                 {
                     if (b.def.popOnEnd && b.pos.y > -20f) Pop(b);
@@ -95,6 +102,8 @@ namespace Cubestruction.Tools
                 b.visual.position = b.pos;
                 if (b.def.bulletShape == "disc" && b.vel.sqrMagnitude > 0.01f)
                     b.visual.rotation = Quaternion.LookRotation(b.vel) * Quaternion.Euler(0, Time.time * 1440f % 360f, 0);
+                else if (b.def.bulletShape == "torpedo" && b.vel.sqrMagnitude > 0.01f)
+                    b.visual.rotation = Quaternion.LookRotation(b.vel) * Quaternion.Euler(0, 0, Time.time * 900f % 360f);
             }
             if (_spawn.Count > 0) { _live.AddRange(_spawn); _spawn.Clear(); }
         }
@@ -109,7 +118,10 @@ namespace Cubestruction.Tools
             {
                 var r = new Vector3((float)b.rng.NextDouble() * 2 - 1, (float)b.rng.NextDouble() * 2 - 1, (float)b.rng.NextDouble() * 2 - 1);
                 var dir = (normal * 1.3f + r).normalized;
-                float speed = (5f + (float)b.rng.NextDouble() * 4f) * b.scale;
+                if (normal == Vector3.zero && r.sqrMagnitude > 1f) r = r.normalized;   // mid-air burst: all directions
+                if (normal == Vector3.zero) dir = r.sqrMagnitude > 0.01f ? r.normalized : Vector3.up;
+                float speed = (b.def.splitSpeed > 0 ? b.def.splitSpeed * (0.8f + 0.4f * (float)b.rng.NextDouble())
+                                                     : 5f + (float)b.rng.NextDouble() * 4f) * b.scale;
                 var c = new Bullet
                 {
                     def = child, pos = point + normal * 0.05f, vel = dir * speed, bouncesLeft = child.bounces,
@@ -135,6 +147,7 @@ namespace Cubestruction.Tools
         bool Step(Bullet b, float dt, VoxelCube cube)
         {
             var t = b.def;
+            if (b.burrowing) return Burrow(b, dt, cube);
             b.vel += Physics.gravity * t.gravity * b.scale * dt;
             var move = b.vel * dt;
             float dist = move.magnitude;
@@ -157,7 +170,22 @@ namespace Cubestruction.Tools
             if (!hit) { b.pos += move; return true; }
 
             Impacts++;
-            if (!t.popOnEnd)   // bomblets only bounce; they damage when they pop
+            if (isVoxel && t.burrowS > 0)
+            {
+                // Drill Torpedo: start boring straight ahead
+                b.burrowing = true; b.burrowLeft = t.burrowS; b.digAt = 0;
+                b.vel = dir * t.burrowSpeed * b.scale;
+                b.pos = point;
+                return true;
+            }
+            if (t.gooRadiusCells > 0)
+            {
+                if (isVoxel && b.authority && cube.IsSpawned) cube.ServerGoo(cell, t.gooRadiusCells);
+                FxHub.Instance?.LocalBlast(point, 0.25f * b.scale, BulletColor(t));
+                b.pos = point;
+                return false;
+            }
+            if (!t.popOnEnd && t.damage > 0)   // bomblets only bounce; they damage when they pop
             {
                 if (isVoxel && b.authority && cube.IsSpawned)
                     cube.ServerDamage(cube.CellToWorld(cell), t.radiusCells, t.damage, t.tier, false, b.owner);
@@ -186,11 +214,35 @@ namespace Cubestruction.Tools
             return false;
         }
 
+        /// <summary>Drill Torpedo burrowing: straight through the cube, digging a tunnel you can climb into.</summary>
+        bool Burrow(Bullet b, float dt, VoxelCube cube)
+        {
+            b.pos += b.vel * dt;
+            b.burrowLeft -= dt;
+            b.digAt -= dt;
+            if (b.digAt <= 0)
+            {
+                b.digAt = 0.08f;
+                if (b.authority && cube && cube.IsSpawned) cube.ServerDamage(b.pos, b.def.radiusCells, b.def.damage, b.def.tier, false, b.owner);
+                FxHub.Instance?.BulletImpact(b.pos, b.def, b.authority);
+                Impacts++;
+            }
+            bool outside = true;
+            if (cube && cube.Grid != null)
+            {
+                var c = cube.WorldToCell(b.pos); int n = cube.Grid.N;
+                outside = c.x < -3 || c.y < -3 || c.z < -3 || c.x > n + 2 || c.y > n + 2 || c.z > n + 2;
+            }
+            if (b.burrowLeft > 0 && !outside) return true;
+            FxHub.Instance?.LocalBlast(b.pos, 0.8f * b.scale, BulletColor(b.def));
+            return false;
+        }
+
         Transform Get(ToolDef t, float scale)
         {
             var tr = _pool.Count > 0 ? _pool.Pop() : Create();
             tr.gameObject.SetActive(true);
-            tr.localScale = (t.bulletShape == "disc" ? new Vector3(2f, 0.35f, 2f) : Vector3.one * 2f) * t.bulletSize * scale;
+            tr.localScale = (t.bulletShape == "disc" ? new Vector3(2f, 0.35f, 2f) : t.bulletShape == "torpedo" ? new Vector3(1.2f, 1.2f, 4f) : Vector3.one * 2f) * t.bulletSize * scale;
             tr.rotation = Quaternion.identity;
             var col = BulletColor(t);
             var block = new MaterialPropertyBlock();
@@ -235,6 +287,11 @@ namespace Cubestruction.Tools
                 case "Minigun": return new Color(0.55f, 0.95f, 1f, 0.9f);
                 case "Shotgun": return new Color(1f, 0.82f, 0.35f, 0.95f);
                 case "RailGun": return new Color(0.8f, 1f, 1f, 1f);
+                case "FireworkLauncher":
+                    if (t.splitCount == 0) { var fc = Color.HSVToRGB(Random.value, 0.75f, 1f); fc.a = 1f; return fc; }   // stars
+                    return new Color(1f, 0.95f, 0.6f, 1f);
+                case "DrillTorpedo": return new Color(1f, 0.62f, 0.2f, 1f);
+                case "GooGun": return new Color(1f, 0.42f, 0.78f, 0.95f);
                 case "HeliGatling": return new Color(1f, 0.7f, 0.25f, 1f);
                 case "RippleDisc": return new Color(0.75f, 0.55f, 1f, 0.95f);
                 case "BoostBlaster": return new Color(1f, 0.55f, 0.3f, 0.95f);

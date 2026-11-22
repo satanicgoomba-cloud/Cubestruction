@@ -188,7 +188,7 @@ namespace Cubestruction
 
             // ---- physics guns: each must fire bullets that hit, ricochet and dig (fired from 3 m off the +Z face)
             var front = cube.Center + Vector3.forward * cube.HalfExtent;
-            foreach (var (gunId, seconds, pulse) in new[] { ("Minigun", 3f, false), ("PinballPopper", 3f, false), ("Shotgun", 3f, true), ("RailGun", 3f, true), ("RippleDisc", 3f, true), ("BloomMortar", 3.5f, true) })
+            foreach (var (gunId, seconds, pulse) in new[] { ("Minigun", 3f, false), ("PinballPopper", 3f, false), ("Shotgun", 3f, true), ("RailGun", 3f, true), ("RippleDisc", 3f, true), ("BloomMortar", 3.5f, true), ("FireworkLauncher", 3f, true), ("DrillTorpedo", 4.5f, true) })
             {
                 var gun = Balance.Tool(gunId);
                 me.ownedTools.Value |= 1UL << gun.index;
@@ -210,6 +210,55 @@ namespace Cubestruction
                 if (gun.bounces > 0) Check(bounces > 0, $"{gun.name} bullets ricochet");
             }
             _pitch = 0f;
+
+            // ---- Batch 1 specials, fired at the untouched -Z face from 3 m (the +Z firing line is bored hollow by now)
+            var back = cube.Center + Vector3.back * cube.HalfExtent;
+            System.Collections.IEnumerator FireAt(string id, float seconds, bool pulse, float pitch, float sweepDeg = 0f)
+            {
+                var w = Balance.Tool(id);
+                me.ownedTools.Value |= 1UL << w.index;
+                me.Tools.SelectTool(w.index);
+                me.Motor.Teleport(new Vector3(back.x, cube.transform.position.y + 0.2f, back.z - 3f), 0f);
+                _aim = Quaternion.identity; _pitch = pitch;
+                yield return new WaitForSeconds(0.3f);
+                _holdUse = true; _pulseUse = pulse;
+                for (float tt = 0; tt < seconds; tt += Time.deltaTime)
+                {
+                    _aim = Quaternion.Euler(0, Mathf.Sin(tt * 3f) * sweepDeg, 0);   // sweep like a player would
+                    yield return null;
+                }
+                _holdUse = false; _pulseUse = false; _pitch = 0f; _aim = Quaternion.identity;
+                yield return new WaitForSeconds(0.8f);
+            }
+            {
+                int v0 = cube.alive.Value, b0 = Tools.FxHub.LightningBolts;
+                yield return FireAt("ChainZapper", 2f, false, -20f);
+                int bolts = Tools.FxHub.LightningBolts - b0, dug = v0 - cube.alive.Value;
+                Check(bolts > 0 && dug >= bolts * 3, $"Chain Zapper arcs across voxels ({bolts} bolts, {dug} voxels)");
+            }
+            {
+                int glass0 = cube.GlassCount;
+                yield return FireAt("FrostRay", 1.5f, false, -35f, 25f);
+                int glass = cube.GlassCount - glass0;
+                bool brittle = true;
+                foreach (var gi in cube.CellsMarked(CellMark.Glass)) { if (cube.Grid.hp[gi] > 0.05f) brittle = false; break; }
+                Check(glass > 20 && brittle, $"Frost Ray turns voxels to one-hit glass ({glass} frozen)");
+            }
+            {
+                int goo0 = cube.GooCount;
+                yield return FireAt("GooGun", 1.5f, false, -45f, 25f);
+                Check(cube.GooCount - goo0 > 20, $"Boing Goo coats the cube ({cube.GooCount - goo0} voxels)");
+                // drop onto a goo patch on top of the cube: it must bounce you
+                int n = cube.Grid.N;
+                cube.ServerGoo(new Vector3Int(n / 2, n - 1, n / 2), 3f);
+                yield return null;
+                int bounces0 = PlayerMotor.GooBounces;
+                me.Motor.Teleport(cube.CellToWorld(new Vector3Int(n / 2, n - 1, n / 2)) + Vector3.up * 2.5f, 0f);
+                float vy = 0;
+                for (float tt = 0; tt < 1.5f; tt += Time.deltaTime) { vy = Mathf.Max(vy, me.Motor.Velocity.y); yield return null; }
+                Check(PlayerMotor.GooBounces > bounces0 && vy > 8f, $"landing on goo bounces you ({vy:0.0} m/s up)");
+                yield return new WaitForSeconds(2f);
+            }
 
             // ---- movement weapons, out on the open platform behind the -X face
             var open = new Vector3(cube.Center.x - cube.HalfExtent - 3.5f, cube.transform.position.y + 0.2f, cube.Center.z);
@@ -278,7 +327,7 @@ namespace Cubestruction
             {
                 Check(cube.LootCount >= 30, $"loot hidden in the cube ({cube.LootCount} gold voxels)");
                 int best = -1, bestDepth = int.MaxValue, n = cube.Grid.N;
-                foreach (var idx in cube.loot)
+                foreach (var idx in cube.CellsMarked(CellMark.Loot))
                 {
                     var c = cube.Grid.Coord(idx);
                     int d = Mathf.Min(Mathf.Min(Mathf.Min(c.x, n - 1 - c.x), Mathf.Min(c.y, n - 1 - c.y)), Mathf.Min(c.z, n - 1 - c.z));

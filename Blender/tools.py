@@ -466,6 +466,68 @@ def raptor_missile(p):
     p.torus((0, -0.05, 0), 0.05, 0.008, AQ, matrix=rot(x=90), segs=12, minor=3)
 
 
+def goo_gun(p):
+    """Squeezy goo sprayer: a bulbous pink tank and a stubby nozzle."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.04, 0.04), (0.06, 0.2, 0.07), WH, bevel=0.025)
+    p.sphere((0, 0.02, 0.13), 0.075, RD, segs=12, rings=8, scale=(1, 1.2, 1))           # goo tank
+    p.torus((0, 0.02, 0.13), 0.075, 0.01, CH, segs=12, minor=3)
+    p.cyl((0, -0.14, 0.045), (0, -0.3, 0.045), 0.022, LI, r2=0.034, segs=10)            # nozzle
+    p.sphere((0, -0.31, 0.045), 0.03, RD, segs=10, rings=5)                             # goo drip
+
+
+def chain_zapper(p):
+    """Tesla rod: coils and a glowing ball at the tip."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.03, 0.045), (0.055, 0.2, 0.065), SK, bevel=0.022)
+    p.cyl((0, -0.12, 0.05), (0, -0.42, 0.05), 0.014, CH, segs=8)
+    for y in (-0.17, -0.23, -0.29, -0.35):
+        p.torus((0, y, 0.05), 0.035, 0.009, YE, matrix=rot(x=90), segs=10, minor=3)
+    p.sphere((0, -0.46, 0.05), 0.04, GL, segs=12, rings=6)
+    p.box((0, 0.12, 0.03), (0.045, 0.1, 0.06), WH, bevel=0.018)
+
+
+def firework_launcher(p):
+    """Party tube: striped barrel with a star on the muzzle."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    tz = 0.08
+    p.cyl((0, 0.18, tz), (0, -0.42, tz), 0.055, WH, segs=14)
+    for i, y in enumerate((0.1, -0.02, -0.14, -0.26, -0.38)):
+        p.cyl((0, y, tz), (0, y - 0.05, tz), 0.058, (RD, YE, LI, SK, PU)[i], segs=14)
+    for a in range(5):                                                                    # star points
+        p.box((0, -0.45, tz), (0.012, 0.012, 0.07), YE, bevel=0.004, matrix=rot(y=a * 72))
+    p.box((0, -0.15, -0.015), (0.035, 0.05, 0.09), DK, bevel=0.012, matrix=rot(x=10))
+
+
+def drill_torpedo(p):
+    """Two-handed launcher with a drill-tipped torpedo loaded."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    tz = 0.1
+    p.cyl((0, 0.3, tz), (0, -0.3, tz), 0.07, OR, segs=14, caps=False)
+    p.cyl((0, 0.3, tz), (0, 0.36, tz), 0.075, DK, segs=14)
+    p.cyl((0, -0.3, tz), (0, -0.48, tz), 0.06, CH, r2=0.0, segs=12)                      # drill bit
+    for k in range(3):
+        p.torus((0, -0.33 - k * 0.045, tz), 0.045 - k * 0.012, 0.007, DK, matrix=rot(x=90), segs=10, minor=3)
+    p.box((0, -0.15, -0.02), (0.035, 0.05, 0.1), DK, bevel=0.012, matrix=rot(x=10))
+    p.box((0.085, 0.0, tz + 0.04), (0.03, 0.12, 0.05), AQ, bevel=0.012)
+
+
+def frost_ray(p):
+    """Ice beam emitter: crystal shards around a glowing core."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.04, 0.045), (0.06, 0.22, 0.075), WH, bevel=0.025)
+    p.cyl((0, -0.15, 0.05), (0, -0.36, 0.05), 0.03, SK, segs=10)
+    p.sphere((0, -0.38, 0.05), 0.035, GL, segs=12, rings=6)
+    for a in (0, 120, 240):                                                               # ice shards
+        p.box((0, -0.3, 0.05), (0.018, 0.12, 0.018), AQ, bevel=0.005, matrix=rot(y=a, x=-20))
+    p.box((0, 0.14, 0.03), (0.05, 0.12, 0.06), SK, bevel=0.02)
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -476,7 +538,9 @@ TOOLS = {
     "Jetpack": jetpack, "RocketBoots": rocket_boots, "ClimbingGloves": climbing_gloves,
     "PinballPopper": pinball_popper, "BoostBlaster": boost_blaster, "RippleDisc": ripple_disc,
     "BloomMortar": bloom_mortar, "BoingPad": boing_pad, "RaptorLaptop": raptor_laptop,
-    "HeliGunner": heli_gunner, "RaptorMissile": raptor_missile,
+    "HeliGunner": heli_gunner, "RaptorMissile": raptor_missile, "GooGun": goo_gun,
+    "ChainZapper": chain_zapper, "FireworkLauncher": firework_launcher, "DrillTorpedo": drill_torpedo,
+    "FrostRay": frost_ray,
 }
 
 

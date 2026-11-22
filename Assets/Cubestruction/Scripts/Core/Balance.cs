@@ -68,6 +68,14 @@ namespace Cubestruction
         public float selfRecoil;   // m/s pushed back along the aim when fired (Boost Blaster: rocket-jump without rockets)
         public int splitCount;     // on first impact the shell bursts into this many bouncing bomblets
         public float splitDamage, splitRadiusCells; public int splitBounces;
+        public float splitAfterS;  // burst in mid-air after this many seconds (fireworks)
+        public float splitSpeed;   // child speed m/s (0 = 5-9 m/s bomblets)
+        public bool splitStars;    // children are stars: they carve where they land instead of popping
+        public int chainJumps;     // Chain Zapper: arcs to this many more voxels...
+        public float chainRangeCells;   // ...each within this many cells
+        public bool freezes;       // Frost Ray: turns voxels to glass instead of damaging them
+        public float burrowS, burrowSpeed;   // Drill Torpedo: on impact, burrow forward this long at this speed
+        public float gooRadiusCells;         // Boing Goo: blobs coat exposed voxels in this radius
         [NonSerialized] public bool popOnEnd;   // bomblets: bounce harmlessly, explode when spent
         [NonSerialized] ToolDef _split;
 
@@ -82,7 +90,9 @@ namespace Cubestruction
                     _split = (ToolDef)MemberwiseClone();
                     _split.damage = splitDamage; _split.radiusCells = splitRadiusCells; _split.bounces = splitBounces;
                     _split.splitCount = 0; _split.pellets = 1; _split.pierceCells = 0; _split.gravity = 1f;
-                    _split.restitution = 0.55f; _split.bulletSize = 0.06f; _split.lifeS = 2.5f; _split.popOnEnd = true;
+                    _split.restitution = 0.55f; _split.bulletSize = 0.06f; _split.lifeS = 2.5f; _split.popOnEnd = !splitStars;
+                    _split.splitAfterS = 0; _split.burrowS = 0;
+                    if (splitStars) { _split.gravity = 0.25f; _split.bulletSize = 0.05f; _split.lifeS = 1.4f; }
                     _split._split = null;
                 }
                 return _split;
