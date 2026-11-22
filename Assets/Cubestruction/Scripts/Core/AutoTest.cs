@@ -17,6 +17,7 @@ namespace Cubestruction
     public class AutoTest : MonoBehaviour
     {
         bool _holdUse, _pulseUse;
+        bool _swing, _reel; Ray _swingAim; Vector3 _pump;
         float _pitch;
         Quaternion _aim = Quaternion.identity;
         int _failures;
@@ -85,6 +86,41 @@ namespace Cubestruction
                 int left = 0;
                 for (int x = 0; x < 3; x++) for (int cy = top; cy < n; cy++) for (int z = 0; z < 3; z++) if (cube.Grid.IsSolid(x, cy, z)) left++;
                 Check(left == 0, $"a cut-off corner block collapses ({27 - left}/27 cells fell)");
+            }
+
+            // ---- rope swing: hook the top of the +X face from 5 m out, get lifted, reel in, pump, let go
+            {
+                var tether = Balance.Tool("GrappleHook");
+                me.ownedTools.Value |= 1UL << tether.index;
+                var xFace = cube.Center + Vector3.right * cube.HalfExtent;
+                float baseY = cube.transform.position.y;
+                me.Motor.Teleport(new Vector3(xFace.x + 5f, baseY + 0.2f, xFace.z), 270f);
+                yield return new WaitForSeconds(0.5f);
+                float y0 = me.transform.position.y;
+                var target = new Vector3(xFace.x, baseY + cube.HalfExtent * 1.7f, xFace.z);
+                var eye = me.headAnchor.position;
+                _swingAim = new Ray(eye, (target - eye).normalized);
+                _swing = true;
+                yield return new WaitForSeconds(1.5f);
+                Check(me.Motor.IsGrappling, "Zip Tether attaches to the cube");
+                float lifted = me.transform.position.y - y0;
+                Check(lifted > 1.5f, $"the rope lifts you off the ground ({lifted:0.0} m)");
+                float len0 = me.Motor.RopeLength;
+                _reel = true;
+                yield return new WaitForSeconds(0.8f);
+                _reel = false;
+                Check(me.Motor.RopeLength < len0 - 3f, $"jump reels the rope in ({len0:0.0} -> {me.Motor.RopeLength:0.0} m)");
+                _pump = Vector3.forward;   // pump sideways along the face
+                float best = 0;
+                for (float tt = 0; tt < 2f; tt += Time.deltaTime) { var v = me.Motor.Velocity; best = Mathf.Max(best, new Vector2(v.x, v.z).magnitude); yield return null; }
+                _pump = Vector3.zero;
+                Check(best > 3f, $"pumping builds a swing ({best:0.0} m/s)");
+                float hang = me.transform.position.y - baseY;
+                _swing = false;
+                yield return null; yield return null;
+                var fling = me.Motor.Velocity;
+                Check(!me.Motor.IsGrappling && fling.magnitude > 2f, $"letting go flings you ({fling.magnitude:0.0} m/s from {hang:0.0} m up)");
+                yield return new WaitForSeconds(2.5f);
             }
 
             // ---- shop (host writes money directly to set up each case)
@@ -259,6 +295,9 @@ namespace Cubestruction
         {
             var me = PlayerAvatar.Local;
             if (me == null || me.Tools == null) return;
+            if (_swing) { me.Tools.swingHeld = true; me.Tools.swingAim = _swingAim; }
+            if (_reel) me.Motor.reelIn = true;
+            if (_pump != Vector3.zero) me.Motor.moveIntent = _pump;
             if (_holdUse)
             {
                 me.transform.rotation = _aim;

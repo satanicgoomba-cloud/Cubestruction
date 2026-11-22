@@ -13,6 +13,15 @@ namespace Cubestruction.UI
     public class MobileControls : MonoBehaviour
     {
         RectTransform _stickBase, _stickKnob;
+        GameObject _swingBtn;
+
+        void Update()
+        {
+            // the Swing button only appears once you own the Zip Tether
+            var me = PlayerAvatar.Local;
+            bool show = me != null && me.Tools != null && me.Tools.HasTether;
+            if (_swingBtn && _swingBtn.activeSelf != show) { _swingBtn.SetActive(show); if (!show) MobileInput.SwingHeld = false; }
+        }
         bool _sprint;
         Image _sprintImg;
 
@@ -55,7 +64,8 @@ namespace Cubestruction.UI
 
             // ---- buttons (bottom-right cluster), above the look zone so they receive touches first
             HoldButton(root, "Use", new Vector2(-150, 260), 150, v => MobileInput.UseHeld = v, AeroPalette.Danger);
-            HoldButton(root, "Jump", new Vector2(-330, 150), 120, v => { if (v) MobileInput.Jump = true; }, AeroPalette.Lime);
+            HoldButton(root, "Jump", new Vector2(-330, 150), 120, v => { if (v) MobileInput.Jump = true; MobileInput.JumpHeld = v; }, AeroPalette.Lime);
+            _swingBtn = HoldButton(root, "Swing", new Vector2(-500, 230), 120, v => MobileInput.SwingHeld = v, new Color(0.72f, 0.52f, 1f)).gameObject;
             HoldButton(root, "Climb", new Vector2(-120, 90), 120, v => MobileInput.ClimbHeld = v, AeroPalette.Aqua);
             _sprintImg = HoldButton(root, "Sprint", new Vector2(-330, 320), 100, v =>
             {

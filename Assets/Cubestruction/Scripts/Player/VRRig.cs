@@ -175,6 +175,15 @@ namespace Cubestruction.Player
             if (Left.secondary.WasPressedThisFrame() || Right.secondary.WasPressedThisFrame()) UI.GameMenus.Instance?.ToggleShop();
             _avatar.Tools.SetTriggers(Left.trigger.IsPressed(), Right.trigger.IsPressed());
 
+            // swing (Zip Tether): the off-hand's trigger shoots a web-line when that hand is empty;
+            // jump (right stick click) reels in, release to fling
+            var swingHand = GameSettings.LeftHanded ? Right : Left;
+            bool handFree = _avatar.Tools.Equipped(swingHand.IsLeft) == null;
+            _avatar.Tools.swingHeld = handFree && swingHand.trigger.IsPressed();
+            _avatar.Tools.swingAim = new Ray(swingHand.t.position, swingHand.t.forward);
+            _avatar.Tools.swingHand = swingHand.t;
+            _motor.reelIn = _motor.IsGrappling && _jump.IsPressed();
+
             Climb();
             Locomote(dt);
             Turn(dt);

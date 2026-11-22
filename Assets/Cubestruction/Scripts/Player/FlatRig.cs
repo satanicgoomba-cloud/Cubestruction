@@ -9,14 +9,15 @@ namespace Cubestruction.Player
     {
         public static Vector2 Move;
         public static Vector2 LookDelta;
-        public static bool Jump, UseHeld, ClimbHeld, Sprint;
+        public static bool Jump, UseHeld, ClimbHeld, Sprint, SwingHeld, JumpHeld;
         public static void ConsumeFrame() { LookDelta = Vector2.zero; Jump = false; }
     }
 
     /// <summary>
     /// First-person rig for PC / Mac / Mobile (owner only).
     ///   WASD / left stick / touch pad    move          Mouse / right stick / touch drag  look
-    ///   Space / A / Jump button          jump (double jump with Hop Boots)
+    ///   Space / A / Jump button          jump (double jump with Hop Boots); while swinging: reel in
+    ///   Hold Q / X / Swing button        Zip Tether: shoot a web-line and swing (if owned)
     ///   Hold E / LB / Climb button       spider-climb any surface you're facing
     ///   LMB / RT / Use button            use tool       RMB / LT   jetpack (if owned)
     ///   1-9 / scroll / D-pad             hotbar         Tab / B / Y  shop      Shift / L3  sprint
@@ -33,7 +34,7 @@ namespace Cubestruction.Player
         PlayerAvatar _avatar;
         PlayerMotor _motor;
         float _pitch;
-        InputAction _move, _look, _jump, _sprint, _use, _climb, _jet, _shop, _scroll, _next, _prev;
+        InputAction _move, _look, _jump, _sprint, _use, _climb, _jet, _shop, _scroll, _next, _prev, _swing;
 
         void OnEnable()
         {
@@ -63,6 +64,7 @@ namespace Cubestruction.Player
             _climb = Btn("<Keyboard>/e", "<Gamepad>/leftShoulder");
             _jet = Btn("<Mouse>/rightButton", "<Gamepad>/leftTrigger");
             _shop = Btn("<Keyboard>/tab", "<Gamepad>/buttonNorth");
+            _swing = Btn("<Keyboard>/q", "<Gamepad>/buttonWest");
             _next = Btn("<Gamepad>/dpad/right", "<Gamepad>/rightShoulder");
             _prev = Btn("<Gamepad>/dpad/left", null);
             _scroll = new InputAction(binding: "<Mouse>/scroll/y"); _scroll.Enable();
@@ -104,6 +106,7 @@ namespace Cubestruction.Player
             if (_motor.Frozen || menus)
             {
                 _motor.moveIntent = Vector3.zero; _motor.climbHeld = false;
+                _avatar.Tools.swingHeld = false; _motor.reelIn = false;
                 _avatar.Tools.SetTriggers(false, false);
                 MobileInput.ConsumeFrame();
                 return;
@@ -139,6 +142,12 @@ namespace Cubestruction.Player
             _motor.sprint = _sprint.IsPressed() || MobileInput.Sprint;
             _motor.jetHeld = _jet.IsPressed() || (MobileInput.Jump && !_motor.Grounded);
             if (_jump.WasPressedThisFrame() || MobileInput.Jump) _motor.Jump();
+
+            // ---- swing (Zip Tether): hold to hang on, jump reels in, release to fling
+            _avatar.Tools.swingHeld = _swing.IsPressed() || MobileInput.SwingHeld;
+            _avatar.Tools.swingAim = AimRay;
+            _avatar.Tools.swingHand = _avatar.rightHand;
+            _motor.reelIn = _motor.IsGrappling && (_jump.IsPressed() || MobileInput.JumpHeld);
 
             // ---- tools
             _avatar.Tools.SetTriggers(false, _use.IsPressed() || MobileInput.UseHeld);

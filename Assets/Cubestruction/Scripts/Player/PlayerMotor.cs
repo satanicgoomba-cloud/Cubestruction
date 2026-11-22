@@ -36,6 +36,14 @@ namespace Cubestruction.Player
         [HideInInspector] public Vector3 climbDelta;      // world-space translation requested by climbing hands this frame
         [HideInInspector] public bool climbHeld;          // any hand gripping something climbable
         [HideInInspector] public bool jetHeld;
+        [HideInInspector] public bool reelIn;             // swinging: shorten the rope (jump held)
+
+        // rope swing (Zip Tether)
+        public const float MinRope = 1.5f, ReelSpeed = 10f, RopeSpring = 25f, SwingPump = 9f;
+        public float RopeLength { get; private set; }
+        public Vector3 RopeAnchor => _grappleTarget;
+        /// <summary>Where the rope attaches on the body.</summary>
+        public Vector3 Chest => transform.position + Vector3.up * WorldScale;
 
         PlayerAvatar _avatar;
         bool _usedDoubleJump;
@@ -63,11 +71,11 @@ namespace Cubestruction.Player
             _grappling = false;
         }
 
-        public void AddImpulse(Vector3 v) { Velocity += v; Grounded = false; _grappling = false; }
+        public void AddImpulse(Vector3 v) { Velocity += v; Grounded = false; }   // ropes hold: rocket-jump mid-swing
 
         public void Jump()
         {
-            if (Frozen) return;
+            if (Frozen || _grappling) return;   // while swinging, jump reels in instead
             if (Grounded || Climbing) { Velocity.y = jumpSpeed; Grounded = false; Climbing = false; return; }
             if (!_usedDoubleJump && HasTool("RocketBoots"))
             {
@@ -77,8 +85,25 @@ namespace Cubestruction.Player
             }
         }
 
-        public void StartGrapple(Vector3 target) { _grappleTarget = target; _grappling = true; }
-        public void StopGrapple() { _grappling = false; }
+        /// <summary>Attach a rope. It starts shorter than the distance and yanks, so it lifts you off the ground.</summary>
+        public void StartGrapple(Vector3 target)
+        {
+            _grappleTarget = target;
+            _grappling = true;
+            // start well short of the distance and yank toward the anchor, so attaching lifts you
+            RopeLength = Mathf.Max(MinRope * WorldScale, Vector3.Distance(Chest, target) * 0.7f);
+            Velocity += (target - Chest).normalized * 6f * WorldScale;
+            Grounded = false;
+        }
+
+        /// <summary>Let go: keep the swing's momentum plus a little hop, Spider-Man style.</summary>
+        public void StopGrapple()
+        {
+            if (!_grappling) return;
+            _grappling = false;
+            Velocity = Velocity * 1.08f + Vector3.up * 2.5f * WorldScale;
+            _usedDoubleJump = false;
+        }
         public bool IsGrappling => _grappling;
 
         void Update()
@@ -103,19 +128,14 @@ namespace Cubestruction.Player
             if (Climbing) Climbing = false; // released: keep whatever fling velocity the rig set
             climbDelta = Vector3.zero;
 
-            // ---- grapple: spring toward the anchor
-            if (_grappling)
-            {
-                var to = _grappleTarget - transform.position;
-                if (to.magnitude < 1.2f * scale) _grappling = false;
-                else Velocity = Vector3.Lerp(Velocity, to.normalized * 14f * scale, dt * 4f);
-            }
+            // ---- rope swing: pendulum on an inextensible rope
+            if (_grappling) { Swing(dt, scale); FallCheck(); return; }
 
             // ---- walking
             Vector3 targetH = moveIntent * (sprint ? sprintSpeed : walkSpeed) * scale;
             Vector3 h = new Vector3(Velocity.x, 0, Velocity.z);
             float control = Grounded ? 12f : 12f * airControl;
-            if (!_grappling) h = Vector3.MoveTowards(h, targetH, control * scale * dt);
+            h = Vector3.MoveTowards(h, targetH, control * scale * dt);
             Velocity.x = h.x; Velocity.z = h.z;
 
             // ---- jetpack
@@ -124,7 +144,7 @@ namespace Cubestruction.Player
                 JetFuel -= dt;
                 Velocity.y = Mathf.MoveTowards(Velocity.y, 4.5f * scale, 25f * dt);
             }
-            else if (!_grappling) Velocity.y += gravity * scale * dt;
+            else Velocity.y += gravity * scale * dt;
 
             var flags = Controller.Move(Velocity * dt);
             Grounded = (flags & CollisionFlags.Below) != 0;
@@ -139,6 +159,34 @@ namespace Cubestruction.Player
             }
             if ((flags & CollisionFlags.Above) != 0 && Velocity.y > 0) Velocity.y = 0;
 
+            FallCheck();
+        }
+
+        void Swing(float dt, float scale)
+        {
+            if (reelIn) RopeLength = Mathf.Max(MinRope * scale, RopeLength - ReelSpeed * scale * dt);
+            Velocity += moveIntent * SwingPump * scale * dt;          // pump the swing with the stick/WASD
+            Velocity.y += gravity * scale * dt;
+            var offset = Chest - _grappleTarget;
+            float dist = offset.magnitude;
+            if (dist > 0.01f && dist >= RopeLength)
+            {
+                var n = offset / dist;
+                float outward = Vector3.Dot(Velocity, n);
+                if (outward > 0) Velocity -= n * outward;                 // a taut rope doesn't stretch
+                // and pulls you back to its length, but never faster than 8 m/s (no slingshot over the anchor)
+                if (-Vector3.Dot(Velocity, n) < 8f * scale) Velocity -= n * (dist - RopeLength) * RopeSpring * dt;
+            }
+            Velocity = Vector3.ClampMagnitude(Velocity, 32f * scale);
+            var flags = Controller.Move(Velocity * dt);
+            Grounded = (flags & CollisionFlags.Below) != 0;
+            if (Grounded && Velocity.y < 0) Velocity.y = 0;
+            if ((flags & CollisionFlags.Above) != 0 && Velocity.y > 0) Velocity.y = 0;
+            JetFuel = Mathf.Min(MaxJetFuel, JetFuel + dt);
+        }
+
+        void FallCheck()
+        {
             // fell off the arena (the meadow is 12 m down): respawn on the pedestal edge
             if (transform.position.y < -8f)
             {

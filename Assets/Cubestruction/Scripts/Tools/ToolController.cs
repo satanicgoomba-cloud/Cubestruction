@@ -19,6 +19,18 @@ namespace Cubestruction.Tools
 
         public readonly NetworkVariable<int> leftTool = new NetworkVariable<int>(-1, writePerm: NetworkVariableWritePermission.Owner);
         public readonly NetworkVariable<int> rightTool = new NetworkVariable<int>(0, writePerm: NetworkVariableWritePermission.Owner);
+        // rope swing, synced so everyone sees your web-line
+        public readonly NetworkVariable<bool> ropeOn = new NetworkVariable<bool>(false, writePerm: NetworkVariableWritePermission.Owner);
+        public readonly NetworkVariable<Vector3> ropeAnchor = new NetworkVariable<Vector3>(default, writePerm: NetworkVariableWritePermission.Owner);
+
+        /// <summary>Swing input, written every frame by the rig (FlatRig / VRRig / mobile) on the owner.</summary>
+        [System.NonSerialized] public bool swingHeld;
+        [System.NonSerialized] public Ray swingAim;
+        [System.NonSerialized] public Transform swingHand;
+        LineRenderer _rope;
+        float _swingCooldown, _anchorCheck;
+
+        public bool HasTether { get { var g = Balance.Tool("GrappleHook"); return g != null && _avatar.Owns(g.index); } }
 
         PlayerAvatar _avatar;
         PlayerMotor _motor;
@@ -64,7 +76,7 @@ namespace Cubestruction.Tools
             var list = new List<ToolDef>();
             foreach (var t in Balance.Tools)
             {
-                if (t.id == "ClimbingGloves" || t.id == "RocketBoots" || t.id == "Jetpack") continue;
+                if (t.id == "ClimbingGloves" || t.id == "RocketBoots" || t.id == "Jetpack" || t.id == "GrappleHook") continue;   // passives / own button
                 if (_avatar.CanUse(t)) list.Add(t);
             }
             return list;
@@ -116,6 +128,68 @@ namespace Cubestruction.Tools
             }
             Tick(_left, Equipped(true));
             Tick(_right, Equipped(false));
+            TickSwing();
+        }
+
+        // ------------------------------------------------------------------ rope swing (owner)
+
+        void TickSwing()
+        {
+            _swingCooldown -= Time.deltaTime;
+            bool canSwing = HasTether && _avatar.role.Value == PlayerRole.Miner && !_motor.Frozen &&
+                            MatchManager.Instance != null && MatchManager.Instance.state.Value == MatchState.Playing;
+            bool held = swingHeld && canSwing;
+            if (held && !_motor.IsGrappling && _swingCooldown <= 0)
+            {
+                // keep trying while held: swing the aim across a wall and it catches (Spider-Man style)
+                var t = Balance.Tool("GrappleHook");
+                if (RaycastWorld(swingAim, t.rangeM * _motor.WorldScale, out var p))
+                {
+                    _motor.StartGrapple(p);
+                    _anchorCheck = 0.2f;
+                    if (_avatar.IsVR) Haptic(swingHand == _avatar.leftHand ? _left : _right, 0.5f);
+                    FxHub.Instance?.BulletImpact(p, t, false);
+                }
+                _swingCooldown = 0.1f;
+            }
+            if (!held && _motor.IsGrappling) { _motor.StopGrapple(); _swingCooldown = 0.15f; }
+
+            // the voxel we hang from was destroyed: drop
+            if (_motor.IsGrappling && (_anchorCheck -= Time.deltaTime) <= 0)
+            {
+                _anchorCheck = 0.2f;
+                var cube = VoxelCube.Instance;
+                var a = _motor.RopeAnchor;
+                bool holds = (cube && cube.SolidNear(a, cube.cellSize * 0.75f, out _)) ||
+                             Physics.CheckSphere(a, 0.08f, ~(1 << 5), QueryTriggerInteraction.Ignore);
+                if (!holds) _motor.StopGrapple();
+            }
+
+            if (ropeOn.Value != _motor.IsGrappling) ropeOn.Value = _motor.IsGrappling;
+            if (_motor.IsGrappling && (ropeAnchor.Value - _motor.RopeAnchor).sqrMagnitude > 1e-4f) ropeAnchor.Value = _motor.RopeAnchor;
+        }
+
+        /// <summary>Everyone draws every rope (owner from its live state, others from the synced anchor).</summary>
+        void LateUpdate()
+        {
+            if (!IsSpawned) return;
+            bool on = IsOwner ? _motor.IsGrappling : ropeOn.Value;
+            if (!on) { if (_rope) _rope.enabled = false; return; }
+            if (!_rope)
+            {
+                var go = new GameObject("Rope");
+                go.transform.SetParent(transform, false);
+                _rope = go.AddComponent<LineRenderer>();
+                _rope.material = FxHub.Instance ? FxHub.Instance.glowMaterial : null;
+                _rope.positionCount = 2;
+                _rope.numCapVertices = 2;
+                _rope.startColor = new Color(1f, 1f, 1f, 0.95f); _rope.endColor = new Color(0.75f, 1f, 0.45f, 0.95f);
+            }
+            var hand = IsOwner && swingHand ? swingHand : (_avatar.IsVR ? _avatar.leftHand : _avatar.rightHand);
+            _rope.enabled = true;
+            _rope.widthMultiplier = 0.03f * _motor.WorldScale;
+            _rope.SetPosition(0, hand ? hand.position : _motor.Chest);
+            _rope.SetPosition(1, IsOwner ? _motor.RopeAnchor : ropeAnchor.Value);
         }
 
         Transform HandT(Hand h) => h.isLeft ? _avatar.leftHand : _avatar.rightHand;
@@ -244,20 +318,9 @@ namespace Cubestruction.Tools
                     break;
 
                 case ToolCategory.Movement:
-                    if (t.id == "GrappleHook")
-                    {
-                        if (pressed && h.cooldown <= 0)
-                        {
-                            var ray = Aim(h, t);
-                            if (RaycastWorld(ray, t.rangeM * scale, out var p)) { _motor.StartGrapple(p); h.lastTip = p; }
-                            h.cooldown = t.cooldown;
-                        }
-                        if (released) _motor.StopGrapple();
-                        SetLine(h, _motor.IsGrappling, HandT(h).position, h.lastTip, AeroPalette.Lime);
-                    }
-                    break;
+                    break;   // passives; the Zip Tether has its own swing button (TickSwing)
             }
-            if (t.cat != ToolCategory.Beam && !(t.id == "GrappleHook")) SetLine(h, false);
+            if (t.cat != ToolCategory.Beam) SetLine(h, false);
         }
 
         /// <summary>VR melee: the tool's tip must move fast through a voxel. Real swings, no button.</summary>
