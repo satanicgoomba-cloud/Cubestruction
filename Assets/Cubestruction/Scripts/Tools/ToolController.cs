@@ -181,19 +181,28 @@ namespace Cubestruction.Tools
                 case ToolCategory.Gun:
                 {
                     bool supported = !t.twoHanded || TwoHandSupported(h);
-                    h.spin = t.id == "Minigun" ? Mathf.MoveTowards(h.spin, h.trigger && supported ? 1 : 0, Time.deltaTime * 2.5f) : 1;
-                    bool auto = t.IsContinuous;
+                    h.spin = t.id == "Minigun" ? Mathf.MoveTowards(h.spin, h.trigger && supported ? 1 : 0, Time.deltaTime * 4f) : 1;
+                    bool auto = t.IsContinuous || t.automatic;
                     bool fire = supported && h.cooldown <= 0 && h.spin >= 1 && (auto ? h.trigger : pressed);
                     if (!fire) break;
                     var ray = Aim(h, t);
                     if (t.id == "RocketLauncher") ThrowRpc(t.index, ray.origin + ray.direction * 0.6f * scale, ray.direction * 32f);
+                    else if (t.IsProjectile)
+                    {
+                        // physics bullets: draw ours now (and simulate damage too if we are the host), tell the server
+                        var muzzle = ray.origin + ray.direction * 0.35f * scale;
+                        int seed = Random.Range(1, int.MaxValue);
+                        FxHub.Instance?.FireBullets(t, muzzle, ray.direction, seed, OwnerClientId, IsServer, scale);
+                        FireRpc(t.index, muzzle, ray.direction, seed, scale);
+                    }
                     else
                     {
                         RayRpc(t.index, ray.origin, ray.direction, Random.Range(1, int.MaxValue));
                         FxHub.Instance?.LocalTracer(ray.origin, RaycastWorld(ray, t.rangeM, out var p) ? p : ray.origin + ray.direction * t.rangeM, t);
                     }
                     if (t.knockback > 0 && !_avatar.IsVR) _motor.AddImpulse(-ray.direction * t.knockback * 0.15f);   // recoil
-                    h.cooldown = t.cooldown;
+                    // carry the leftover so rapid fire keeps its real rate instead of snapping to whole frames
+                    h.cooldown = Mathf.Max(h.cooldown, -t.cooldown) + t.cooldown;
                     Haptic(h, t.twoHanded ? 0.7f : 0.4f);
                     break;
                 }
@@ -383,6 +392,19 @@ namespace Cubestruction.Tools
                 cube.ServerDamageRay(new Ray(origin, d), t.rangeM * _motor.WorldScale, t.radiusCells, t.damage, t.tier, t.pierceCells, OwnerClientId);
             }
             if (t.cat == ToolCategory.Gun) FxHub.Instance.TracerRpc(origin, origin + dir.normalized * Mathf.Min(t.rangeM, 30f), tool, OwnerClientId);
+        }
+
+        [Rpc(SendTo.Server)]
+        void FireRpc(int tool, Vector3 muzzle, Vector3 dir, int seed, float scale)
+        {
+            var t = Balance.Tool(tool);
+            if (!ServerCheck(t, muzzle, 1f) || !t.IsProjectile || float.IsNaN(dir.x)) return;
+            scale = Mathf.Clamp(scale, 0.1f, 10f);
+            var fx = FxHub.Instance; if (!fx) return;
+            // a remote shooter's bullets: the server's copy is the one that damages (the host's own
+            // volley was already simulated with authority when it fired)
+            if (!IsOwner) fx.FireBullets(t, muzzle, dir, seed, OwnerClientId, true, scale);
+            fx.BulletsRpc(tool, muzzle, dir, seed, OwnerClientId, scale);
         }
 
         [Rpc(SendTo.Server)]

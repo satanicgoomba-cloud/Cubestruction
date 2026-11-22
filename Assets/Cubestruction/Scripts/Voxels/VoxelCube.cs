@@ -153,6 +153,20 @@ namespace Cubestruction.Voxels
             return true;
         }
 
+        /// <summary>World-space normal of the face of <paramref name="cell"/> that <paramref name="worldPoint"/>
+        /// (a raycast hit) lies on. Falls back to facing back along <paramref name="dir"/>.</summary>
+        public Vector3 FaceNormal(Vector3Int cell, Vector3 worldPoint, Vector3 dir)
+        {
+            var l = WorldToCell(worldPoint) - new Vector3(cell.x, cell.y, cell.z);   // each axis in [-0.5, 0.5]
+            float ax = Mathf.Abs(l.x), ay = Mathf.Abs(l.y), az = Mathf.Abs(l.z);
+            Vector3 n;
+            if (ax >= ay && ax >= az) n = new Vector3(Mathf.Sign(l.x), 0, 0);
+            else if (ay >= az) n = new Vector3(0, Mathf.Sign(l.y), 0);
+            else n = new Vector3(0, 0, Mathf.Sign(l.z));
+            n = transform.TransformDirection(n);
+            return Vector3.Dot(n, dir) < 0 ? n : -dir.normalized;
+        }
+
         // ------------------------------------------------------------------ server damage API
 
         /// <summary>Server only. Damage voxels in a sphere around a world point. Returns money awarded.</summary>

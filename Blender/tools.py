@@ -354,6 +354,29 @@ def climbing_gloves(p):
         p.cyl((x, -0.01, -0.02), (x, -0.01, -0.04), 0.009, CH, r2=0.0, segs=6)
 
 
+def pinball_popper(p):
+    """Rapid-fire bouncy-ball blaster: glass hopper of balls on top, spring plunger at the back."""
+    pistol_grip(p, DK)
+    trigger_guard(p)
+    p.box((0, -0.05, 0.05), (0.07, 0.24, 0.085), WH, bevel=0.03)                  # body
+    p.box((0, -0.2, -0.015), (0.035, 0.05, 0.09), DK, bevel=0.012, matrix=rot(x=10))  # front grip
+    p.cyl((0, -0.17, 0.06), (0, -0.44, 0.06), 0.042, PU, segs=14, caps=False)     # barrel
+    p.cyl((0, -0.44, 0.06), (0, -0.52, 0.06), 0.042, PU, r2=0.065, segs=14, caps=False)  # flared muzzle
+    p.torus((0, -0.52, 0.06), 0.065, 0.012, YE, matrix=rot(x=90), segs=16, minor=4)
+    for y in (-0.24, -0.34):
+        p.torus((0, y, 0.06), 0.045, 0.009, LI, matrix=rot(x=90), segs=12, minor=3)
+    p.cyl((0, -0.04, 0.09), (0, -0.04, 0.2), 0.06, SK, segs=16, caps=False)        # glass hopper
+    p.torus((0, -0.04, 0.2), 0.06, 0.01, CH, segs=16, minor=4)
+    for (x, y, z, m) in ((0.025, -0.02, 0.12, RD), (-0.025, -0.06, 0.125, YE), (0.0, -0.03, 0.16, LI),
+                         (-0.02, -0.01, 0.165, AQ), (0.022, -0.065, 0.165, OR)):  # balls in the hopper
+        p.sphere((x, y, z), 0.022, m, segs=8, rings=4)
+    p.cyl((0, 0.07, 0.06), (0, 0.2, 0.06), 0.012, CH, segs=8)                       # plunger rod
+    for i in range(4):                                                             # spring coils
+        y = 0.085 + i * 0.03
+        p.torus((0, y, 0.06), 0.026, 0.006, CH, matrix=rot(x=90), segs=8, minor=3)
+    p.sphere((0, 0.21, 0.06), 0.034, RD, segs=10, rings=6)                          # plunger knob
+
+
 TOOLS = {
     "Pickaxe": pickaxe, "Shovel": shovel, "SledgeHammer": sledgehammer, "Drill": drill,
     "Jackhammer": jackhammer, "MiningLaser": mining_laser, "PlasmaCutter": plasma_cutter,
@@ -362,6 +385,7 @@ TOOLS = {
     "RocketLauncher": rocket_launcher, "BlackHoleGrenade": black_hole_grenade,
     "SonicHammer": sonic_hammer, "NukeCrate": nuke_crate, "GrappleHook": grapple_hook,
     "Jetpack": jetpack, "RocketBoots": rocket_boots, "ClimbingGloves": climbing_gloves,
+    "PinballPopper": pinball_popper,
 }
 
 

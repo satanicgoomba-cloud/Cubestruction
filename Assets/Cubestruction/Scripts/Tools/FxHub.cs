@@ -15,7 +15,40 @@ namespace Cubestruction.Tools
         public ParticleSystem sparkBurst;
         public AudioClip boomClip, hitClip, zapClip;
 
-        void Awake() { Instance = this; }
+        Bullets _bullets;
+        float _impactSfxAt;
+
+        void Awake()
+        {
+            Instance = this;
+            _bullets = gameObject.AddComponent<Bullets>();
+            _bullets.material = glowMaterial;
+        }
+
+        public int LiveBullets => _bullets ? _bullets.LiveCount : 0;
+
+        /// <summary>Fires a volley on this peer. <paramref name="authority"/> = this copy damages voxels (server only).</summary>
+        public void FireBullets(ToolDef t, Vector3 origin, Vector3 dir, int seed, ulong owner, bool authority, float scale)
+        {
+            _bullets.Fire(t, origin, dir, seed, owner, authority && IsServer, scale);
+            Play(zapClip, origin, t.id == "RailGun" ? 0.7f : 0.25f, t.id == "RailGun" ? 0.7f : t.id == "PinballPopper" ? 1.8f : Random.Range(1.3f, 1.6f));
+        }
+
+        /// <summary>Server -> other clients: draw a volley someone else fired (the shooter drew theirs already).</summary>
+        [Rpc(SendTo.NotServer)]
+        public void BulletsRpc(int tool, Vector3 origin, Vector3 dir, int seed, ulong owner, float scale)
+        {
+            if (NetworkManager.LocalClientId == owner) return;
+            var t = Balance.Tool(tool);
+            if (t != null) FireBullets(t, origin, dir, seed, owner, false, scale);
+        }
+
+        /// <summary>Local-only impact puff (each peer simulates its own bullets, so no RPC).</summary>
+        public void BulletImpact(Vector3 pos, ToolDef t, bool authority)
+        {
+            Burst(pos, t.id == "RailGun" ? 10 : 3, Bullets.BulletColor(t));
+            if (Time.time >= _impactSfxAt) { _impactSfxAt = Time.time + 0.05f; Play(hitClip, pos, 0.25f, Random.Range(1.1f, 1.5f)); }
+        }
 
         [Rpc(SendTo.ClientsAndHost)]
         public void ExplosionRpc(Vector3 pos, float radiusM, int tool, bool pulse)

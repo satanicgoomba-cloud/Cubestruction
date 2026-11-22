@@ -1,5 +1,5 @@
 {
-  "notes": "damage is per affected cell per use (beams/drills: per tick). radiusCells uses linear falloff to 50% at the edge (explosives fall to 0%). price is per purchase; consumables add 'stack' charges per purchase. knockback is the impulse (m/s) applied to players at the blast centre; >= ragdollThreshold puts them into ragdoll. Tuned with Tools/balance_sim.py.",
+  "notes": "damage is per affected cell per use (beams/drills: per tick). radiusCells uses linear falloff to 50% at the edge (explosives fall to 0%). price is per purchase; consumables add 'stack' charges per purchase. knockback is the impulse (m/s) applied to players at the blast centre; >= ragdollThreshold puts them into ragdoll. Tuned with Tools/balance_sim.py. Guns with speed > 0 fire physics bullets: gravity (x normal), bounces (ricochets; every impact damages), restitution (speed kept per bounce), spreadDeg (cone), bulletSize (visual m), lifeS; automatic = hold to fire. Bullet guns were tuned by hand (Nov 2026) for ~1.5-2x the old hitscan output; balance_sim.py doesn't model bounces yet.",
   "ragdollThreshold": 9,
   "tools": [
     {
@@ -19,7 +19,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Trusty starter pick. Swing it into the cube."
+      "desc": "Trusty starter pick. Swing it into the cube.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Shovel",
@@ -38,7 +46,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Wide scoops. Great on the soft crust."
+      "desc": "Wide scoops. Great on the soft crust.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "ClimbingGloves",
@@ -57,7 +73,15 @@
       "pellets": 0,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Passive: double climb stamina, 40% faster climbing."
+      "desc": "Passive: double climb stamina, 40% faster climbing.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Grenade",
@@ -76,7 +100,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 11,
-      "desc": "Pull, throw, boom. 5 per pack."
+      "desc": "Pull, throw, boom. 5 per pack.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "SledgeHammer",
@@ -95,7 +127,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Heavy swings that crack stone."
+      "desc": "Heavy swings that crack stone.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "StickyBomb",
@@ -114,7 +154,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 12,
-      "desc": "Sticks to whatever it hits."
+      "desc": "Sticks to whatever it hits.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "GrappleHook",
@@ -133,7 +181,15 @@
       "pellets": 0,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Fire at the cube and reel yourself in."
+      "desc": "Fire at the cube and reel yourself in.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Drill",
@@ -152,7 +208,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Hold against the cube. Bores through crystal."
+      "desc": "Hold against the cube. Bores through crystal.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Dynamite",
@@ -171,7 +235,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 15,
-      "desc": "Long fuse, big pop. 4 per pack."
+      "desc": "Long fuse, big pop. 4 per pack.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Shotgun",
@@ -180,9 +252,9 @@
       "price": 1800,
       "consumable": false,
       "stack": 0,
-      "damage": 37,
-      "radiusCells": 1.0,
-      "cooldown": 0.9,
+      "damage": 26,
+      "radiusCells": 0.75,
+      "cooldown": 0.85,
       "tier": 2,
       "twoHanded": true,
       "rangeM": 18,
@@ -190,7 +262,15 @@
       "pellets": 8,
       "pierceCells": 0,
       "knockback": 3,
-      "desc": "Two-handed. Eight pellets, short range."
+      "desc": "Two-handed. Eight bouncy pellets that ricochet twice.",
+      "speed": 45,
+      "gravity": 0.5,
+      "bounces": 2,
+      "restitution": 0.7,
+      "spreadDeg": 7,
+      "bulletSize": 0.05,
+      "lifeS": 1.6,
+      "automatic": false
     },
     {
       "id": "MiningLaser",
@@ -209,7 +289,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Continuous beam. Mine from a distance."
+      "desc": "Continuous beam. Mine from a distance.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "RocketBoots",
@@ -228,7 +316,15 @@
       "pellets": 0,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Double jump and a boost dash off walls."
+      "desc": "Double jump and a boost dash off walls.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "TNT",
@@ -247,7 +343,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 20,
-      "desc": "Place it, light it, RUN. 3 per pack."
+      "desc": "Place it, light it, RUN. 3 per pack.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Jackhammer",
@@ -266,7 +370,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Two-handed. Rattles through magma."
+      "desc": "Two-handed. Rattles through magma.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "C4",
@@ -285,7 +397,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 24,
-      "desc": "Stick on, detonate remotely. Comes with a Detonator."
+      "desc": "Stick on, detonate remotely. Comes with a Detonator.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Detonator",
@@ -304,7 +424,15 @@
       "pellets": 0,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Detonates all of your placed Pixel Charges."
+      "desc": "Detonates all of your placed Pixel Charges.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Jetpack",
@@ -323,7 +451,15 @@
       "pellets": 0,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Hold to fly. 6 seconds of fuel, recharges on contact."
+      "desc": "Hold to fly. 6 seconds of fuel, recharges on contact.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "Minigun",
@@ -332,9 +468,9 @@
       "price": 7000,
       "consumable": false,
       "stack": 0,
-      "damage": 79,
-      "radiusCells": 0.9,
-      "cooldown": 0.05,
+      "damage": 34,
+      "radiusCells": 0.75,
+      "cooldown": 0.04,
       "tier": 3,
       "twoHanded": true,
       "rangeM": 30,
@@ -342,7 +478,42 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "Two-handed. Spins up, never stops."
+      "desc": "Two-handed. 25 bubbles a second that skip off whatever they hit.",
+      "speed": 75,
+      "gravity": 0.15,
+      "bounces": 1,
+      "restitution": 0.55,
+      "spreadDeg": 2.0,
+      "bulletSize": 0.045,
+      "lifeS": 2.0,
+      "automatic": false
+    },
+    {
+      "id": "PinballPopper",
+      "name": "Pinball Popper",
+      "category": "Gun",
+      "price": 8000,
+      "consumable": false,
+      "stack": 0,
+      "damage": 70,
+      "radiusCells": 0.75,
+      "cooldown": 0.15,
+      "tier": 4,
+      "twoHanded": false,
+      "rangeM": 40,
+      "fuse": 0,
+      "pellets": 1,
+      "pierceCells": 0,
+      "knockback": 0,
+      "desc": "Hold to spray bouncy balls. Each one ricochets up to 5 times.",
+      "speed": 26,
+      "gravity": 1.0,
+      "bounces": 5,
+      "restitution": 0.82,
+      "spreadDeg": 3,
+      "bulletSize": 0.11,
+      "lifeS": 6,
+      "automatic": true
     },
     {
       "id": "PlasmaCutter",
@@ -361,7 +532,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 0,
-      "desc": "A hotter beam that slices magma."
+      "desc": "A hotter beam that slices magma.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "RocketLauncher",
@@ -372,7 +551,7 @@
       "stack": 0,
       "damage": 161,
       "radiusCells": 3.05,
-      "cooldown": 1.6,
+      "cooldown": 0.8,
       "tier": 4,
       "twoHanded": true,
       "rangeM": 60,
@@ -380,7 +559,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 18,
-      "desc": "Two-handed. Rocket-jump if you dare."
+      "desc": "Two-handed. Rocket-jump if you dare.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "SonicHammer",
@@ -399,7 +586,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 4,
-      "desc": "Every hit rings out a shockwave."
+      "desc": "Every hit rings out a shockwave.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "RailGun",
@@ -409,8 +604,8 @@
       "consumable": false,
       "stack": 0,
       "damage": 402,
-      "radiusCells": 0.5,
-      "cooldown": 2.0,
+      "radiusCells": 0.8,
+      "cooldown": 1.4,
       "tier": 5,
       "twoHanded": true,
       "rangeM": 80,
@@ -418,7 +613,15 @@
       "pellets": 1,
       "pierceCells": 22,
       "knockback": 6,
-      "desc": "Two-handed. Pierces straight through the cube."
+      "desc": "Two-handed. A glass slug that punches through the cube and ricochets.",
+      "speed": 260,
+      "gravity": 0,
+      "bounces": 2,
+      "restitution": 0.9,
+      "spreadDeg": 0,
+      "bulletSize": 0.07,
+      "lifeS": 1.0,
+      "automatic": false
     },
     {
       "id": "BlackHoleGrenade",
@@ -437,7 +640,15 @@
       "pellets": 6,
       "pierceCells": 0,
       "knockback": -8,
-      "desc": "Pulls everything in, then crushes it (6 pulses). 2 per pack."
+      "desc": "Pulls everything in, then crushes it (6 pulses). 2 per pack.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     },
     {
       "id": "NukeCrate",
@@ -456,7 +667,15 @@
       "pellets": 1,
       "pierceCells": 0,
       "knockback": 60,
-      "desc": "10 second countdown. Get very, very far away."
+      "desc": "10 second countdown. Get very, very far away.",
+      "speed": 0,
+      "gravity": 0,
+      "bounces": 0,
+      "restitution": 0,
+      "spreadDeg": 0,
+      "bulletSize": 0,
+      "lifeS": 0,
+      "automatic": false
     }
   ]
 }

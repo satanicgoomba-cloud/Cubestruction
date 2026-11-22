@@ -53,11 +53,21 @@ namespace Cubestruction
         public int pierceCells;
         public float knockback;
         public string desc;
+        // physics projectiles (guns with speed > 0; 0 keeps the instant hitscan ray)
+        public float speed;        // m/s at the muzzle
+        public float gravity;      // multiple of normal gravity
+        public int bounces;        // ricochets before the bullet is spent (every impact damages)
+        public float restitution;  // speed kept per bounce
+        public float spreadDeg;    // cone half-angle for pellets / inaccuracy
+        public float bulletSize;   // visual radius, m
+        public float lifeS;        // seconds before it fizzles
+        public bool automatic;     // hold to keep firing even with a cooldown above 0.12 s
 
         [NonSerialized] public int index;
         [NonSerialized] public ToolCategory cat;
         public bool IsExplosive => cat == ToolCategory.Throwable || cat == ToolCategory.Placed || id == "RocketLauncher";
         public bool IsContinuous => cooldown <= 0.12f;
+        public bool IsProjectile => cat == ToolCategory.Gun && speed > 0;
     }
 
     [Serializable]
