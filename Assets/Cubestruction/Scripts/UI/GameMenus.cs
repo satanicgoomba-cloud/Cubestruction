@@ -791,7 +791,7 @@ namespace Cubestruction.UI
             }
             else if (Camera.main != null) { _menuCam = Camera.main; _menuRig = _menuCam.gameObject; return; }
             _menuRig = new GameObject("MenuRig");
-            _menuRig.transform.position = new Vector3(0, 0, -14f);
+            _menuRig.transform.position = MenuRigSpot;
             var camGo = new GameObject("MenuCamera");
             camGo.transform.SetParent(_menuRig.transform, false);
             _menuCam = camGo.AddComponent<Camera>();
@@ -825,8 +825,8 @@ namespace Cubestruction.UI
             {
                 // slow orbit around the arena for the menu background
                 float a = Time.unscaledTime * 0.08f;
-                _menuCam.transform.position = new Vector3(Mathf.Sin(a) * 20f, 9f, Mathf.Cos(a) * 20f);
-                _menuCam.transform.LookAt(new Vector3(0, 4f, 0));
+                _menuCam.transform.position = new Vector3(Mathf.Sin(a) * 32f, 14f, Mathf.Cos(a) * 32f);
+                _menuCam.transform.LookAt(new Vector3(0, 8f, 0));
             }
 
             Camera flatCam = null;
@@ -856,7 +856,7 @@ namespace Cubestruction.UI
         }
 
         bool _menuRecenter = true;
-        static readonly Vector3 MenuRigSpot = new Vector3(0, 0, -14f);
+        static readonly Vector3 MenuRigSpot = new Vector3(0, 0, -20f);   // in front of the 17 m cube
 
         void UpdateVRPlacement(PlayerAvatar me)
         {

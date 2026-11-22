@@ -18,7 +18,9 @@ namespace Cubestruction
 
         public NetworkObject cubePrefab;
         public Transform pedestal;
-        [Tooltip("Cube size for Mining mode. 40 = 64k voxels (Quest-host safe).")] public int miningCubeSize = 40;
+        /// <summary>Mining cube edge in voxels: 68 = ~314k voxels, ~17 m tall (5x the original 40 = 64k).</summary>
+        public const int DefaultMiningCubeSize = 68;
+        [Tooltip("Cube size for Mining mode. 68 = ~314k voxels, 17 m.")] public int miningCubeSize = DefaultMiningCubeSize;
 
         public readonly NetworkVariable<GameMode> mode = new NetworkVariable<GameMode>(GameMode.Mining);
         public readonly NetworkVariable<MatchState> state = new NetworkVariable<MatchState>(MatchState.Lobby);

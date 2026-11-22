@@ -152,6 +152,72 @@ namespace Cubestruction.Voxels
                 if (solid[i] && !_visited[i]) Kill(i, killed);
         }
 
+        // ---- incremental island check: only around cells destroyed since the last check
+        int[] _stamp;      // cells reached by a search that found the floor in generation _gen
+        int _gen;
+        readonly Stack<int> _dfs = new Stack<int>();
+        readonly List<int> _region = new List<int>();
+
+        /// <summary>
+        /// Same rule as <see cref="CollapseFloatingIslands"/> but only searches from the solid
+        /// neighbours of <paramref name="removed"/> (cells destroyed since the last check). Each
+        /// search heads downward first and stops at the floor, so in a mostly solid cube it costs a
+        /// few dozen steps instead of a flood over the whole grid. A search that can't reach the
+        /// floor has found a floating island, which collapses.
+        /// </summary>
+        public void CollapseIslandsNear(List<int> removed, List<int> killed)
+        {
+            int count = N * N * N, nn = N * N;
+            if (_stamp == null) _stamp = new int[count];
+            if (++_gen == int.MaxValue) { Array.Clear(_stamp, 0, count); _gen = 1; }
+            foreach (int r in removed)
+            {
+                int rz = r % N, ry = (r / N) % N, rx = r / nn;
+                for (int k = 0; k < 6; k++)
+                {
+                    int x = rx, y = ry, z = rz;
+                    switch (k) { case 0: x--; break; case 1: x++; break; case 2: y--; break; case 3: y++; break; case 4: z--; break; default: z++; break; }
+                    if (!InBounds(x, y, z)) continue;
+                    int seed = Index(x, y, z);
+                    if (!solid[seed] || _stamp[seed] == _gen) continue;   // gone, or already known to rest on the floor
+                    if (!ReachesFloor(seed)) foreach (int i in _region) Kill(i, killed);
+                }
+            }
+        }
+
+        /// <summary>DFS from seed preferring down; true if it touches y = 0 or a cell already known grounded.
+        /// Leaves the visited cells in _region and stamps them grounded on success.</summary>
+        bool ReachesFloor(int seed)
+        {
+            int nn = N * N;
+            _region.Clear(); _dfs.Clear();
+            int visit = -_gen;   // temporary mark for this search
+            _stamp[seed] = visit; _dfs.Push(seed); _region.Add(seed);
+            bool grounded = false;
+            while (_dfs.Count > 0 && !grounded)
+            {
+                int idx = _dfs.Pop();
+                int z = idx % N, y = (idx / N) % N, x = idx / nn;
+                if (y == 0) { grounded = true; break; }
+                // push the downward step last so it is explored first
+                grounded |= Push(idx + 1, z < N - 1, visit); grounded |= Push(idx - 1, z > 0, visit);
+                grounded |= Push(idx + nn, x < N - 1, visit); grounded |= Push(idx - nn, x > 0, visit);
+                grounded |= Push(idx + N, y < N - 1, visit); grounded |= Push(idx - N, y > 0, visit);
+            }
+            if (grounded) foreach (int i in _region) _stamp[i] = _gen;
+            return grounded;
+        }
+
+        bool Push(int idx, bool inBounds, int visit)
+        {
+            if (!inBounds || !solid[idx]) return false;
+            int s = _stamp[idx];
+            if (s == _gen) return true;          // joins a region already proven grounded
+            if (s == visit) return false;
+            _stamp[idx] = visit; _dfs.Push(idx); _region.Add(idx);
+            return false;
+        }
+
         void Visit(int idx)
         {
             if (!solid[idx] || _visited[idx]) return;

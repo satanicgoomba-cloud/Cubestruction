@@ -7,7 +7,7 @@ namespace Cubestruction
     [RequireComponent(typeof(Camera))]
     public class LobbyCamera : MonoBehaviour
     {
-        public float radius = 24f, height = 9f, speed = 6f;
+        public float radius = 34f, height = 14f, speed = 6f;
         Camera _cam;
         void Awake() { _cam = GetComponent<Camera>(); _cam.tag = "MainCamera"; }
         void LateUpdate()
@@ -18,7 +18,7 @@ namespace Cubestruction
             if (!_cam.enabled) return;
             float a = Time.time * speed * Mathf.Deg2Rad;
             transform.position = new Vector3(Mathf.Sin(a) * radius, height, -Mathf.Cos(a) * radius);
-            transform.LookAt(new Vector3(0, 4f, 0));
+            transform.LookAt(new Vector3(0, 8f, 0));
         }
     }
 }

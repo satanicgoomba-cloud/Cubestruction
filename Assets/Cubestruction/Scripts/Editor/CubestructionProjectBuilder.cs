@@ -362,7 +362,8 @@ namespace Cubestruction.EditorTools
             // pedestal sized for the mining cube + a walkable ring
             var pedestal = InstantiateModel("Env/Pedestal", null, PrimitiveType.Cylinder, new Vector3(14, 0.5f, 14));
             pedestal.name = "Pedestal";
-            float wanted = 40 * 0.25f + 10f;       // cube 10 m + 5 m ring each side
+            float cubeM = MatchManager.DefaultMiningCubeSize * 0.25f;   // 17 m
+            float wanted = cubeM + 10f;            // cube + 5 m walkable ring each side
             var pb = pedestal.GetComponentInChildren<MeshFilter>()?.sharedMesh?.bounds.size.x ?? 14f;
             pedestal.transform.localScale = new Vector3(wanted / pb, 1, wanted / pb);
             foreach (var mf in pedestal.GetComponentsInChildren<MeshFilter>()) mf.gameObject.AddComponent<MeshCollider>();
@@ -372,7 +373,7 @@ namespace Cubestruction.EditorTools
             ground.GetComponent<Renderer>().sharedMaterial = Mat("Meadow", Shader.Find("Cubestruction/AeroGloss"), new Color(0.35f, 0.8f, 0.35f), gloss: 12);
             // siege arena floor around the pedestal (units walk on it)
             var arena = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            arena.name = "SiegeArena"; arena.transform.position = new Vector3(0, -0.26f, 0); arena.transform.localScale = new Vector3(56, 0.25f, 56);
+            arena.name = "SiegeArena"; arena.transform.position = new Vector3(0, -0.26f, 0); arena.transform.localScale = new Vector3(wanted + 45f, 0.25f, wanted + 45f);
             arena.GetComponent<Renderer>().sharedMaterial = mats.pedestal;
             // the cylinder primitive ships a CapsuleCollider, which at this flat scale becomes a 28 m sphere
             // swallowing the play area; use the real disc shape instead
@@ -386,15 +387,15 @@ namespace Cubestruction.EditorTools
             {
                 var b = InstantiateModel("Env/Bubble", bubbles, PrimitiveType.Sphere, Vector3.one);
                 foreach (var r in b.GetComponentsInChildren<Renderer>()) r.sharedMaterial = mats.bubble;
-                float a = (float)rng.NextDouble() * Mathf.PI * 2, d = 20 + (float)rng.NextDouble() * 50;
-                b.transform.position = new Vector3(Mathf.Cos(a) * d, 2 + (float)rng.NextDouble() * 25, Mathf.Sin(a) * d);
+                float a = (float)rng.NextDouble() * Mathf.PI * 2, d = cubeM + 10 + (float)rng.NextDouble() * 50;
+                b.transform.position = new Vector3(Mathf.Cos(a) * d, 2 + (float)rng.NextDouble() * (cubeM * 2f), Mathf.Sin(a) * d);
                 b.transform.localScale = Vector3.one * (0.5f + (float)rng.NextDouble() * 3f);
                 b.AddComponent<FloatBob>();
             }
 
             // shop kiosk (decorative landmark; the shop opens from the menu button anywhere)
             var kiosk = InstantiateModel("Env/ShopKiosk", null, PrimitiveType.Cube, new Vector3(1, 2, 1));
-            kiosk.name = "ShopKiosk"; kiosk.transform.position = new Vector3(0, 0, -(5 + 3.5f));
+            kiosk.name = "ShopKiosk"; kiosk.transform.position = new Vector3(0, 0, -(cubeM * 0.5f + 4.5f));
             foreach (var mf in kiosk.GetComponentsInChildren<MeshFilter>()) mf.gameObject.AddComponent<MeshCollider>();
 
             // networking

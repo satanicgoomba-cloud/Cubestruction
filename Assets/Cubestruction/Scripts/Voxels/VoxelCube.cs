@@ -117,6 +117,11 @@ namespace Cubestruction.Voxels
 
         public Vector3 Center => transform.TransformPoint(new Vector3(0, Grid.N * cellSize * 0.5f, 0));
         public float HalfExtent => Grid.N * cellSize * 0.5f;
+        /// <summary>Server: duration of the last floating-island flood fill (perf diagnostics).</summary>
+        public static float LastIslandCheckMs;
+        /// <summary>Debug (-autotest): cross-check the local island search against a full flood fill.</summary>
+        public static bool VerifyIslands;
+        public static int MissedIslandCells;
 
         /// <summary>Is there solid voxel within `radius` metres of a world point? Used for climbing.</summary>
         public bool SolidNear(Vector3 world, float radius, out Vector3 closestWorld)
@@ -191,9 +196,12 @@ namespace Cubestruction.Voxels
             return FinishKills(instigator);
         }
 
+        readonly List<int> _removedSinceCheck = new List<int>(4096);
+
         int FinishKills(ulong instigator)
         {
             if (_killed.Count == 0) return 0;
+            _removedSinceCheck.AddRange(_killed);
             _lastInstigator = instigator;
             _islandCheckAt = Time.time + 0.75f;   // debounce the island flood-fill
             return Broadcast(instigator);
@@ -226,7 +234,19 @@ namespace Cubestruction.Voxels
             {
                 _islandCheckAt = -1;
                 _killed.Clear();
-                Grid.CollapseFloatingIslands(_killed);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Grid.CollapseIslandsNear(_removedSinceCheck, _killed);
+                LastIslandCheckMs = (float)sw.Elapsed.TotalMilliseconds;
+                _removedSinceCheck.Clear();
+                if (VerifyIslands)
+                {
+                    // debug: the full flood fill must find nothing the local check missed
+                    int before = _killed.Count;
+                    Grid.CollapseFloatingIslands(_killed);
+                    MissedIslandCells += _killed.Count - before;
+                    if (_killed.Count > before) Debug.LogWarning($"[VoxelCube] local island check missed {_killed.Count - before} cells");
+                }
+                if (LastIslandCheckMs > 8f) Debug.Log($"[VoxelCube] island check took {LastIslandCheckMs:0.0} ms ({Grid.N}^3)");
                 if (_killed.Count > 0) Broadcast(_lastInstigator);
             }
             if (_dirty.Count > 0)

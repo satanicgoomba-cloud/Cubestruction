@@ -6,7 +6,7 @@
       "id": "Crust",
       "maxDepthFraction": 0.2,
       "tier": 1,
-      "hp": 8,
+      "hp": 4.0,
       "value": 1,
       "color": "#8FE36B",
       "glow": 0.0
@@ -15,7 +15,7 @@
       "id": "Stone",
       "maxDepthFraction": 0.45,
       "tier": 2,
-      "hp": 25,
+      "hp": 12.5,
       "value": 3,
       "color": "#7FB8E8",
       "glow": 0.0
@@ -24,7 +24,7 @@
       "id": "Crystal",
       "maxDepthFraction": 0.7,
       "tier": 3,
-      "hp": 60,
+      "hp": 30.0,
       "value": 8,
       "color": "#B48CFF",
       "glow": 0.35
@@ -33,7 +33,7 @@
       "id": "Magma",
       "maxDepthFraction": 0.9,
       "tier": 4,
-      "hp": 140,
+      "hp": 70.0,
       "value": 20,
       "color": "#FF8A3D",
       "glow": 0.8
@@ -42,7 +42,7 @@
       "id": "Core",
       "maxDepthFraction": 1.0,
       "tier": 5,
-      "hp": 350,
+      "hp": 175.0,
       "value": 60,
       "color": "#FFF27A",
       "glow": 1.0

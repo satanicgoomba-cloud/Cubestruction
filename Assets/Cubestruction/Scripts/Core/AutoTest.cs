@@ -71,6 +71,22 @@ namespace Cubestruction
             var p = me.transform.position;
             Check(p.y > -1f && Mathf.Abs(p.z) < 15f, $"fall respawns near the cube (pos = {p})");
 
+            // ---- floating islands: cut a 3x3x3 block off the top corner; it must collapse, and the
+            // local island search must agree with a full flood fill the whole run
+            VoxelCube.VerifyIslands = true;
+            {
+                int n = cube.Grid.N, top = n - 3;
+                for (int x = 0; x <= 3; x++) for (int z = 0; z <= 3; z++) for (int cy = top - 1; cy < n; cy++)
+                {
+                    bool cut = x == 3 || z == 3 || cy == top - 1;   // the walls and floor around the block
+                    if (cut) cube.ServerDamage(cube.CellToWorld(new Vector3Int(x, cy, z)), 0.4f, 1e6f, 9, false, me.OwnerClientId);
+                }
+                yield return new WaitForSeconds(1.5f);
+                int left = 0;
+                for (int x = 0; x < 3; x++) for (int cy = top; cy < n; cy++) for (int z = 0; z < 3; z++) if (cube.Grid.IsSolid(x, cy, z)) left++;
+                Check(left == 0, $"a cut-off corner block collapses ({27 - left}/27 cells fell)");
+            }
+
             // ---- shop (host writes money directly to set up each case)
             int spade = Balance.Tool("Shovel").index, grenade = Balance.Tool("Grenade").index, sledge = Balance.Tool("SledgeHammer").index;
             me.money.Value = 1000;
@@ -147,7 +163,9 @@ namespace Cubestruction
                 yield return new WaitForSeconds(0.3f);
                 int v0 = cube.alive.Value, f0 = Tools.Bullets.Fired, i0 = Tools.Bullets.Impacts, b0 = Tools.Bullets.Bounces;
                 _holdUse = true; _pulseUse = pulse;
-                yield return new WaitForSeconds(seconds);
+                float worst = 0, total = 0; int frames = 0;
+                for (float tt = 0; tt < seconds; tt += Time.unscaledDeltaTime) { worst = Mathf.Max(worst, Time.unscaledDeltaTime); total += Time.unscaledDeltaTime; frames++; yield return null; }
+                Log($"{gun.name} frame time: avg {1000f * total / Mathf.Max(1, frames):0.0} ms, worst {1000f * worst:0.0} ms, island check {VoxelCube.LastIslandCheckMs:0.0} ms, {Tools.FxHub.Instance?.LiveBullets} bullets live");
                 _holdUse = false; _pulseUse = false;
                 yield return new WaitForSeconds(1.5f);   // let bouncing bullets finish
                 int fired = Tools.Bullets.Fired - f0, hits = Tools.Bullets.Impacts - i0, bounces = Tools.Bullets.Bounces - b0, dug = v0 - cube.alive.Value;
@@ -215,6 +233,7 @@ namespace Cubestruction
                 Check(!sd.IsActive && Siege.EnemyUnit.Live.Count == 0, "ending Siege despawns all units");
             }
 
+            Check(VoxelCube.MissedIslandCells == 0, $"local island check matched the full flood fill (missed {VoxelCube.MissedIslandCells} cells)");
             Log(_failures == 0 ? "ALL PASSED" : _failures + " FAILED");
             yield return new WaitForSeconds(0.5f);
             Application.Quit(_failures == 0 ? 0 : 1);

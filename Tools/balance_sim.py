@@ -155,7 +155,7 @@ def mining_tools():
     return [t for t in TOOLS["tools"] if t["category"] not in ("Movement", "Utility")]
 
 
-def sim_mining(players=1, seed=1, n=40, verbose=True, time_cap=3 * 3600):
+def sim_mining(players=1, seed=1, n=68, verbose=True, time_cap=3 * 3600):
     rng = random.Random(seed)
     cube = Cube(n)
     tools = mining_tools()
@@ -387,12 +387,13 @@ def main():
     ap.add_argument("--players", type=int, default=0)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--runs", type=int, default=8)
+    ap.add_argument("--size", type=int, default=68, help="mining cube edge in voxels (game default 68)")
     a = ap.parse_args()
     if a.mode in ("table", "all"):
         rate_table()
     if a.mode in ("mining", "all"):
         for pl in ([a.players] if a.players else [1, 2, 4]):
-            sim_mining(players=pl, seed=a.seed)
+            sim_mining(players=pl, seed=a.seed, n=a.size)
     if a.mode in ("siege", "all"):
         print("\n=== GOD SIEGE  (God win-rate by skill; target: novice loses, competent God (0.6) wins ~2/3, expert wins)")
         for skill in (0.3, 0.45, 0.6, 0.75, 0.9):
