@@ -35,3 +35,5 @@ __pycache__/
 /Assets/Cubestruction/Resources/ToolVisuals.meta
 /Assets/Cubestruction/Resources/Materials/
 /Assets/Cubestruction/Resources/Materials.meta
+# Unity Android build temp
+/.utmp/
