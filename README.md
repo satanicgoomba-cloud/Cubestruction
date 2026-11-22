@@ -10,7 +10,8 @@ Players on **Meta Quest (VR)**, **PC**, **Mac** and **Mobile** can play together
 | Mode | Who | Goal |
 |---|---|---|
 | **Mining** (co-op, 1–6) | everyone | Clear every voxel. Inner layers pay more and are harder. The MVP is whoever cleared the most. |
-| **God Siege** (1 v 1+) | VR = **God**, PC/Mac/Mobile = **Commander** | The Commander sends ever-stronger waves of units (Age of War style) to destroy the cube's Core. The God defends for 15 minutes with divine skills, including grabbing and throwing units like ragdolls. |
+| **God Siege** (1 v many) | VR = **God**; everyone else votes **Raider** (on foot, with tools and the shop) or **Minion Caster** (one is picked at random from the volunteers) | The Caster sends ever-stronger waves of units (Age of War style) while Raiders dig; together they must destroy the Core. The God (a giant sun with shades and human hands) defends for 15 minutes with gesture skills and grabs, swats and squashes anything. Mana regen +15% per Raider. |
+| **Titan Siege** (always ≥ 5 v 1) | VR = **Titan** (no headset: an **AI Titan**); everyone else **defends**, bots fill the team to 5 | The Titan smashes through three walls (Stone, Crystal, Magma) and the voxel town between them. Defenders man cannons, artillery and rocket pods (stand next to one to load it, Use to fire), and have an RPG, web-swing and a jetpack. Kill the Titan before the third wall falls. |
 
 ![Buddies](Docs/previews/buddy.png)
 ![Tools](Docs/previews/tools.png)
@@ -40,8 +41,8 @@ needed. Blender is optional: the generated models are committed.
      `Unity -batchmode -buildTarget Android -projectPath . -executeMethod Cubestruction.EditorTools.QuestBuild.BuildAll`
    - Mac/PC: a normal standalone build (`-novr` forces flat mode with a headset attached, `-mobileui` forces touch UI).
 5. **Online play (Relay):** link a Unity Cloud project in *Project Settings ▸ Services*. LAN needs nothing.
-6. **Smoke test:** launch any desktop build with `-autotest`. It hosts a LAN game (port 7790), runs ~75 checks
-   (mining, swinging, every weapon, loot, killstreaks, supers, God Siege) and logs `[AutoTest] PASS/FAIL` lines,
+6. **Smoke test:** launch any desktop build with `-autotest`. It hosts a LAN game (port 7790), runs ~117 checks
+   (mining, swinging, every weapon, loot, killstreaks, supers, God Siege, Titan Siege, hotbar); `-shotdir <folder>` saves screenshots of the giants and logs `[AutoTest] PASS/FAIL` lines,
    then quits (exit code 1 on failure).
 
 ## Controls
@@ -56,12 +57,14 @@ needed. Blender is optional: the generated models are committed.
 | B / Y | Shop / menu (laser pointer, trigger to click) |
 | Left stick | Move: Smooth, Teleport arc, or ArmSwing (hold both grips and swing your arms), set in Settings |
 | Off-hand trigger (hand empty) | **Swing**: shoot a web-line from the Zip Tether; right-stick click reels in, let go to fling |
+| Trigger with a Warp Kunai / Saw Yo-yo / Ripple Disc | **Throw it for real**: squeeze, swing, let go (how hard you throw sets the speed). Kunai: press again to warp to it |
 | Right stick | Snap or smooth turn; click to jump |
 
 Two-handed tools (all guns and the Thumper jackhammer) only fire while your off-hand supports the tool, and they aim along both hands.
 
 **PC/Mac:** WASD move · Mouse look · Space jump (double jump with Hop Boots) · **hold E to spider-climb** any surface you face ·
 **hold Q to swing** (Zip Tether; Space reels in) ·
+the **hotbar** holds two rows of 8 (shows each tool's cooldown); own more than 16 tools and pin the ones you want under *Pause ▸ Edit hotbar* (or *Shop ▸ Hotbar*, which works in VR) ·
 LMB use tool · RMB jetpack · 1–9 / wheel hotbar · Tab shop · Shift sprint. Gamepads also work.
 
 **Mobile:** left-side joystick · right-side drag to look · Jump, Use (hold), Climb (hold), Sprint, Swing (once owned), Shop buttons ·
@@ -71,8 +74,26 @@ tap a hotbar slot to switch weapons.
 (click/tap to strike) and a targeting laser in VR; the Heli-Gunner seats you in a circling chopper's door gun;
 supers take over the Use button while active (charge, aim, throw, punch).
 
-**God (VR, Siege):** you are 8× scale. Grip a unit to pick it up and throw it with your real arm (it ragdolls, and impact damage scales with speed).
-Slap units with fast hands. Left stick left/right picks a skill; right trigger casts where you point.
+**God (VR, God Siege):** you're an 8× sun with hands; every skill is a gesture.
+
+| Gesture | Effect |
+|---|---|
+| Grip near a unit or Raider | Grab it (free); let go mid-swing to throw it (Raiders ragdoll) |
+| Fast open hand / slam straight down | Swat (ragdolls Raiders) / squash (kills units, pancakes Raiders) |
+| Trigger | The selected skill appears in that hand; throw it: **Zeus Bolt, Sun Bomb, Hail of Blades, Bubble Ward, Spring Bloom, Comet Drop** |
+| Left stick click / X | Next / previous throwable skill |
+| Hands together + both triggers, then push | **Sun Wave** (the longer the charge, the wider and stronger) |
+| Clap | **Lazy Clouds** (all units at 40% speed) |
+
+Desktop fallback: LMB grab/throw, 1–6 throw at the crosshair, K Sun Wave, C clap.
+
+**Titan (VR, Titan Siege):** 7× scale, slow and heavy. Drag your hands through walls to scrape them (no cooldown);
+a fast punch dents harder the faster you swing; walking into a wall grinds it with your legs; **A / X kick**
+(you plant and swing a huge kick). Swat incoming shots with a fast hand. Desktop fallback: LMB punch, hold RMB scrape, F kick.
+
+**Defender (Titan Siege):** stand at a turret to load it (do it during the 40 s prep!), Use fires it at the Titan.
+Away from turrets: RPG (Use), **hold Q to web-swing** (webs stick to an invisible ceiling 20 voxels above the walls
+and last 3 s each), RMB jetpack.
 
 **Commander (Siege):** WASD/drag to pan, wheel/pinch to zoom, Q/E rotate. Unit buttons at the bottom (hotkeys 1–6), pick one of 3 portals.
 
@@ -88,8 +109,9 @@ Slap units with fast hands. Left stick left/right picks a skill; right trigger c
   trampolines.
 - **Explosives ragdoll you.** Anything with knockback ≥ 9 m/s launches you as a ragdoll, including your own.
   There's a comfort toggle (*Allow ragdoll*) for VR players.
-- **Movement:** climbing, Gecko Gloves, **Zip Tether swinging** (an inextensible rope: pump with the stick, reel in,
-  let go to fling), Hop Boots, Cloud Pack, Boing Pads, Boost Blaster recoil, Warp Kunai, Chain Whip, Bubble Wand
+- **Movement:** climbing, Gecko Gloves, **Zip Tether swinging** (Spider-Man style: each web goes a little ahead
+  of where you're moving, up to an invisible ceiling 20 voxels above the cube, so you can swing forward while
+  shooting sideways; a web lasts 3 s and the next needs a fresh press; pump with the stick, reel in, let go to fling), Hop Boots, Cloud Pack, Boing Pads, Boost Blaster recoil, Warp Kunai, Chain Whip, Bubble Wand
   rides, rocket-jumping.
 - **Guns fire physics bullets** (gravity, ricochets, piercing); every impact digs. They're simulated on every peer
   from a shared seed and only the server's copy does damage.
