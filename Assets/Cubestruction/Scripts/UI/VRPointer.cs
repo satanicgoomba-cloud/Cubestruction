@@ -20,8 +20,10 @@ namespace Cubestruction.UI
         public int uiLayer = 5;
 
         LineRenderer _line;
+        Transform _dot;
         InputAction _clickR, _clickL;
-        Selectable _hover;
+        Selectable _hover, _pressed;
+        static readonly Color LineColor = new Color(0.04f, 0.12f, 0.3f, 1f);   // dark navy: readable on the bright sky
         bool _useLeft;
         float _refreshColliders;
 
@@ -32,10 +34,21 @@ namespace Cubestruction.UI
             if (!_line)
             {
                 _line = gameObject.AddComponent<LineRenderer>();
-                _line.widthMultiplier = 0.006f;
+                _line.widthMultiplier = 0.012f;
                 _line.positionCount = 2;
                 _line.material = new Material(Shader.Find("Sprites/Default"));
-                _line.startColor = new Color(0.6f, 0.95f, 1f, 0.9f); _line.endColor = new Color(0.6f, 0.95f, 1f, 0.1f);
+                _line.startColor = LineColor; _line.endColor = new Color(LineColor.r, LineColor.g, LineColor.b, 0.55f);
+                _line.numCapVertices = 4;
+            }
+            if (!_dot)
+            {
+                var d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                Destroy(d.GetComponent<Collider>());
+                d.name = "PointerDot";
+                d.GetComponent<MeshRenderer>().material = new Material(Shader.Find("Sprites/Default")) { color = LineColor };
+                _dot = d.transform;
+                _dot.SetParent(transform, false);
+                _dot.gameObject.SetActive(false);
             }
         }
 
@@ -43,6 +56,8 @@ namespace Cubestruction.UI
         {
             _clickR?.Disable(); _clickL?.Disable();
             if (_line) _line.enabled = false;
+            if (_dot) _dot.gameObject.SetActive(false);
+            Release(false);
             SetHover(null);
         }
 
@@ -70,6 +85,8 @@ namespace Cubestruction.UI
             if (!canvas || !canvas.gameObject.activeInHierarchy || lh == null || rh == null)
             {
                 if (_line) _line.enabled = false;
+                if (_dot) _dot.gameObject.SetActive(false);
+                Release(false);
                 SetHover(null);
                 return;
             }
@@ -92,17 +109,35 @@ namespace Cubestruction.UI
             }
             _line.enabled = true;
             _line.SetPosition(0, ray.origin); _line.SetPosition(1, end);
+            float s = me != null ? me.transform.localScale.x : 1f;
+            _line.widthMultiplier = 0.012f * s;
+            _dot.gameObject.SetActive(hit != null);
+            if (hit != null) { _dot.position = end; _dot.localScale = Vector3.one * 0.025f * s; }
             SetHover(hit);
 
-            bool click = _useLeft ? _clickL.WasPressedThisFrame() : _clickR.WasPressedThisFrame();
-            if (click && hit != null && hit.IsInteractable())
+            var trigger = _useLeft ? _clickL : _clickR;
+            if (trigger.WasPressedThisFrame() && hit != null && hit.IsInteractable())
             {
-                var ped = new PointerEventData(EventSystem.current);
-                if (hit is Button b) b.onClick.Invoke();
-                else if (hit is Toggle t) t.isOn = !t.isOn;
-                else if (hit is InputField f) { f.ActivateInputField(); TouchScreenKeyboard.Open(f.text); }
-                else ExecuteEvents.Execute(hit.gameObject, ped, ExecuteEvents.pointerClickHandler);
+                // show the pressed (dark) state while the trigger is held; click on release
+                _pressed = hit;
+                ExecuteEvents.Execute(hit.gameObject, Ped(), ExecuteEvents.pointerDownHandler);
             }
+            if (trigger.WasReleasedThisFrame()) Release(true);
+        }
+
+        static PointerEventData Ped() => new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left };
+
+        void Release(bool click)
+        {
+            if (_pressed == null) return;
+            var target = _pressed; _pressed = null;
+            ExecuteEvents.Execute(target.gameObject, Ped(), ExecuteEvents.pointerUpHandler);
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
+            if (!click || target != _hover || !target.IsInteractable()) return;
+            if (target is Button b) b.onClick.Invoke();
+            else if (target is Toggle t) t.isOn = !t.isOn;
+            else if (target is InputField f) { f.ActivateInputField(); TouchScreenKeyboard.Open(f.text); }
+            else ExecuteEvents.Execute(target.gameObject, Ped(), ExecuteEvents.pointerClickHandler);
         }
 
         void SetHover(Selectable s)

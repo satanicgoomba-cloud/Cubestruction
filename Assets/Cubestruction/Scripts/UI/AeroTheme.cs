@@ -167,16 +167,27 @@ namespace Cubestruction.UI
         {
             var img = Image(parent, "Btn_" + label, Pill, tint ?? AeroPalette.Aqua);
             var b = img.gameObject.AddComponent<Button>();
-            var cb = b.colors;
-            cb.normalColor = Color.white; cb.highlightedColor = new Color(1.12f, 1.12f, 1.12f); cb.pressedColor = new Color(0.8f, 0.85f, 0.9f);
-            cb.disabledColor = new Color(0.6f, 0.6f, 0.6f, 0.6f); cb.colorMultiplier = 1.15f;
-            b.colors = cb;
+            PressFeedback(b);
             if (onClick != null) b.onClick.AddListener(onClick);
             var t = Label(img.transform, label, fontSize, TextAnchor.MiddleCenter, Color.white, false);
             t.rectTransform.Fill(4);
             var ol = t.gameObject.AddComponent<Outline>();
             ol.effectColor = new Color(0.05f, 0.3f, 0.5f, 0.55f); ol.effectDistance = new Vector2(1, -1);
             return b;
+        }
+
+        /// <summary>Clear hover/press feedback: darker when pointed at, darker still while pressed.</summary>
+        public static void PressFeedback(Selectable s)
+        {
+            var cb = s.colors;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = new Color(0.72f, 0.76f, 0.82f);
+            cb.pressedColor = new Color(0.45f, 0.5f, 0.58f);
+            cb.selectedColor = Color.white;   // don't stay dark after a click
+            cb.disabledColor = new Color(0.6f, 0.6f, 0.6f, 0.6f);
+            cb.colorMultiplier = 1f;
+            cb.fadeDuration = 0.06f;
+            s.colors = cb;
         }
 
         public static void SetLabel(this Button b, string text)

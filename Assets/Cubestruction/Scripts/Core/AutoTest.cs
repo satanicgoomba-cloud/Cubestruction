@@ -101,6 +101,39 @@ namespace Cubestruction
             yield return new WaitForSeconds(0.5f);
             Check(before - cube.alive.Value > 0, $"Aqua Spade mined {before - cube.alive.Value} voxels in 3 s");
 
+            // ---- mobile UI (-mobileui): hotbar slots must be on top of the touch zones, and a tap switches weapon
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-mobileui") >= 0)
+            {
+                yield return new WaitForSeconds(0.5f);   // hotbar refreshes after the purchases above
+                var orbs = new System.Collections.Generic.List<UnityEngine.UI.Button>();
+                foreach (var b in FindObjectsByType<UnityEngine.UI.Button>())
+                    if (b.name == "Orb" && b.transform.parent.name.StartsWith("Slot") && b.gameObject.activeInHierarchy) orbs.Add(b);
+                orbs.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+                Check(orbs.Count >= 2, $"mobile hotbar shows {orbs.Count} slots");
+                int blocked = 0;
+                foreach (var orb in orbs)
+                {
+                    var ped = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current)
+                        { position = RectTransformUtility.WorldToScreenPoint(null, orb.transform.position) };
+                    var hits = new System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult>();
+                    UnityEngine.EventSystems.EventSystem.current.RaycastAll(ped, hits);
+                    if (hits.Count == 0 || !hits[0].gameObject.transform.IsChildOf(orb.transform)) { blocked++; Log($"slot under {(hits.Count > 0 ? hits[0].gameObject.name : "nothing")}"); }
+                }
+                Check(blocked == 0, $"every hotbar slot is tappable ({orbs.Count - blocked}/{orbs.Count})");
+                if (orbs.Count >= 2)
+                {
+                    int before0 = me.Tools.rightTool.Value;
+                    var target = orbs[orbs.Count - 1];
+                    var ped = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current)
+                        { position = RectTransformUtility.WorldToScreenPoint(null, target.transform.position) };
+                    var hits = new System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult>();
+                    UnityEngine.EventSystems.EventSystem.current.RaycastAll(ped, hits);
+                    if (hits.Count > 0) UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(hits[0].gameObject, ped, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+                    yield return new WaitForSeconds(0.3f);
+                    Check(me.Tools.rightTool.Value != before0, $"tapping a hotbar slot switches weapon ({Balance.Tool(before0)?.name} -> {Balance.Tool(me.Tools.rightTool.Value)?.name})");
+                }
+            }
+
             // ---- physics guns: each must fire bullets that hit, ricochet and dig (fired from 3 m off the +Z face)
             var front = cube.Center + Vector3.forward * cube.HalfExtent;
             foreach (var (gunId, seconds, pulse) in new[] { ("Minigun", 3f, false), ("PinballPopper", 3f, false), ("Shotgun", 3f, true), ("RailGun", 3f, true) })

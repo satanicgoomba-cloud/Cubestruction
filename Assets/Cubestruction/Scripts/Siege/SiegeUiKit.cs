@@ -119,12 +119,7 @@ namespace Cubestruction.Siege
         {
             var img = Panel(parent, name, color);
             var b = img.gameObject.AddComponent<Button>();
-            var cb = b.colors;
-            cb.normalColor = Color.white;
-            cb.highlightedColor = new Color(1.1f, 1.1f, 1.15f);
-            cb.pressedColor = new Color(0.8f, 0.9f, 1f);
-            cb.disabledColor = new Color(0.65f, 0.65f, 0.7f, 0.75f);
-            b.colors = cb;
+            Cubestruction.UI.AeroTheme.PressFeedback(b);
             b.targetGraphic = img;
             if (onClick != null) b.onClick.AddListener(onClick);
             Label(img.transform, "Label", text, fontSize, AeroInk);

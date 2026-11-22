@@ -212,6 +212,7 @@ namespace Cubestruction.UI
                 int idx = i;
                 var img = AeroTheme.Image(colorRow.transform, "Swatch" + i, AeroTheme.Orb, colors[i]);
                 var b = img.gameObject.AddComponent<Button>();
+                AeroTheme.PressFeedback(b);
                 b.onClick.AddListener(() => { GameSettings.ColorIndex = idx; RefreshSwatches(); });
                 _colorSwatches[i] = img;
             }
@@ -364,6 +365,7 @@ namespace Cubestruction.UI
                 // Aero hotbar along the bottom
                 var bar = AeroTheme.Panel(_hud, "HotbarBack");
                 bar.color = new Color(1, 1, 1, 0.55f);
+                bar.raycastTarget = false;   // only the slot orbs take taps/clicks
                 bar.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(1300, 150), new Vector2(0.5f, 0));
                 _hotbarRow = AeroTheme.Rect(bar.transform, "Row").Fill(10);
                 _toolInfo = AeroTheme.Label(_hud, "", 22, TextAnchor.MiddleCenter, Color.white);
@@ -391,7 +393,12 @@ namespace Cubestruction.UI
             row.childControlWidth = false; row.childControlHeight = false; row.childForceExpandWidth = false;
 
             bool mobile = !IsVR && (Application.isMobilePlatform || _forceMobile);
-            if (mobile) _mobile = MobileControls.Create(_hud);
+            if (mobile)
+            {
+                _mobile = MobileControls.Create(_hud);
+                // touch zones go underneath the HUD so tapping a hotbar slot switches weapons
+                _mobile.transform.SetAsFirstSibling();
+            }
         }
 
         HotbarSlot GetSlot(int i)
@@ -410,6 +417,7 @@ namespace Cubestruction.UI
                 s.orb.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(96, 96), new Vector2(0.5f, 1));
                 s.btn = s.orb.gameObject.AddComponent<Button>();
                 s.btn.onClick.AddListener(() => PlayerAvatar.Local?.Tools.SelectHotbarSlot(idx));
+                AeroTheme.PressFeedback(s.btn);
                 s.name = AeroTheme.Label(s.orb.transform, "", 17, TextAnchor.MiddleCenter, AeroPalette.Ink, false);
                 s.name.rectTransform.Fill(6); s.name.fontStyle = FontStyle.Bold;
                 s.count = AeroTheme.Label(s.rt, "", 20, TextAnchor.LowerRight, Color.white, false);
