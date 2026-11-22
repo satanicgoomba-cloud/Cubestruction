@@ -72,7 +72,7 @@ namespace Cubestruction.Siege
             es.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
         }
 
-        public static RectTransform Rect(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        public static RectTransform MakeRect(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
         {
             var go = new GameObject(name, typeof(RectTransform));
             var rt = (RectTransform)go.transform;
@@ -84,7 +84,7 @@ namespace Cubestruction.Siege
 
         public static Image Panel(Transform parent, string name, Color color, bool gloss = true)
         {
-            var rt = Rect(parent, name, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var rt = MakeRect(parent, name, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             var img = rt.gameObject.AddComponent<Image>();
             img.sprite = gloss ? Gloss : Flat;
             img.type = Image.Type.Sliced;
@@ -98,7 +98,7 @@ namespace Cubestruction.Siege
 
         public static Text Label(Transform parent, string name, string text, int size, Color color, TextAnchor anchor = TextAnchor.MiddleCenter)
         {
-            var rt = Rect(parent, name, Vector2.zero, Vector2.one, new Vector2(8, 2), new Vector2(-8, -2));
+            var rt = MakeRect(parent, name, Vector2.zero, Vector2.one, new Vector2(8, 2), new Vector2(-8, -2));
             var t = rt.gameObject.AddComponent<Text>();
             t.font = Font;
             t.text = text;
@@ -115,7 +115,7 @@ namespace Cubestruction.Siege
             return t;
         }
 
-        public static Button Button(Transform parent, string name, string text, Color color, UnityEngine.Events.UnityAction onClick, int fontSize = 24)
+        public static Button MakeButton(Transform parent, string name, string text, Color color, UnityEngine.Events.UnityAction onClick, int fontSize = 24)
         {
             var img = Panel(parent, name, color);
             var b = img.gameObject.AddComponent<Button>();
@@ -135,7 +135,7 @@ namespace Cubestruction.Siege
         public static Image Bar(Transform parent, string name, Color track, Color fill)
         {
             var bg = Panel(parent, name, track);
-            var rt = Rect(bg.transform, "Fill", Vector2.zero, Vector2.one, new Vector2(4, 4), new Vector2(-4, -4));
+            var rt = MakeRect(bg.transform, "Fill", Vector2.zero, Vector2.one, new Vector2(4, 4), new Vector2(-4, -4));
             var f = rt.gameObject.AddComponent<Image>();
             f.sprite = Gloss;
             f.type = Image.Type.Filled;

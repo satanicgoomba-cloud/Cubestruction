@@ -85,48 +85,48 @@ namespace Cubestruction.Siege
             var ink = SiegeUiKit.AeroInk;
 
             // top bar
-            _topBar = SiegeUiKit.Rect(root, "TopBar", new Vector2(0.02f, 1f), new Vector2(0.98f, 1f), new Vector2(0, -120), new Vector2(0, -12));
+            _topBar = SiegeUiKit.MakeRect(root, "TopBar", new Vector2(0.02f, 1f), new Vector2(0.98f, 1f), new Vector2(0, -120), new Vector2(0, -12));
             SiegeUiKit.Panel(_topBar, "Bg", SiegeUiKit.AeroGlass);
             var cells = new[] { "Money", "Era", "Wave", "Timer", "Mana", "Core" };
             var texts = new Text[cells.Length];
             for (int i = 0; i < cells.Length; i++)
             {
-                var c = SiegeUiKit.Rect(_topBar, cells[i], new Vector2(i / (float)cells.Length, 0), new Vector2((i + 1) / (float)cells.Length, 1), new Vector2(6, 8), new Vector2(-6, -8));
+                var c = SiegeUiKit.MakeRect(_topBar, cells[i], new Vector2(i / (float)cells.Length, 0), new Vector2((i + 1) / (float)cells.Length, 1), new Vector2(6, 8), new Vector2(-6, -8));
                 SiegeUiKit.Panel(c, "Bubble", i == 0 ? SiegeUiKit.AeroGold : i == 4 ? new Color(0.75f, 0.65f, 1f, 0.95f) : SiegeUiKit.AeroSky);
                 texts[i] = SiegeUiKit.Label(c, "Text", "", 24, ink);
             }
             _money = texts[0]; _era = texts[1]; _wave = texts[2]; _timer = texts[3]; _mana = texts[4]; _core = texts[5];
             // XP bar under the era bubble, mana bar under the mana bubble
-            var xpRt = SiegeUiKit.Rect(_topBar.Find("Era"), "XP", new Vector2(0.08f, 0f), new Vector2(0.92f, 0f), new Vector2(0, 2), new Vector2(0, 18));
+            var xpRt = SiegeUiKit.MakeRect(_topBar.Find("Era"), "XP", new Vector2(0.08f, 0f), new Vector2(0.92f, 0f), new Vector2(0, 2), new Vector2(0, 18));
             _xpFill = SiegeUiKit.Bar(xpRt, "XPBar", new Color(1, 1, 1, 0.7f), SiegeUiKit.AeroLime);
-            var manaRt = SiegeUiKit.Rect(_topBar.Find("Mana"), "ManaBarRt", new Vector2(0.08f, 0f), new Vector2(0.92f, 0f), new Vector2(0, 2), new Vector2(0, 18));
+            var manaRt = SiegeUiKit.MakeRect(_topBar.Find("Mana"), "ManaBarRt", new Vector2(0.08f, 0f), new Vector2(0.92f, 0f), new Vector2(0, 2), new Vector2(0, 18));
             _manaFill = SiegeUiKit.Bar(manaRt, "ManaBar", new Color(1, 1, 1, 0.7f), new Color(0.6f, 0.5f, 1f, 1f));
 
             // status line (result / warnings)
-            var statusRt = SiegeUiKit.Rect(root, "Status", new Vector2(0.25f, 1f), new Vector2(0.75f, 1f), new Vector2(0, -175), new Vector2(0, -125));
+            var statusRt = SiegeUiKit.MakeRect(root, "Status", new Vector2(0.25f, 1f), new Vector2(0.75f, 1f), new Vector2(0, -175), new Vector2(0, -125));
             _status = SiegeUiKit.Label(statusRt, "Text", "", 26, Color.white);
             _status.GetComponent<Outline>().effectColor = new Color(0.05f, 0.2f, 0.4f, 0.8f);
 
             // portal selector
-            _portalBar = SiegeUiKit.Rect(root, "Portals", new Vector2(0.3f, 0f), new Vector2(0.7f, 0f), new Vector2(0, 200), new Vector2(0, 256));
+            _portalBar = SiegeUiKit.MakeRect(root, "Portals", new Vector2(0.3f, 0f), new Vector2(0.7f, 0f), new Vector2(0, 200), new Vector2(0, 256));
             string[] names = { "Portal A", "Portal B", "Portal C" };
             for (int i = 0; i < 3; i++)
             {
                 int idx = i;
-                var cell = SiegeUiKit.Rect(_portalBar, names[i], new Vector2(i / 3f, 0), new Vector2((i + 1) / 3f, 1), new Vector2(6, 0), new Vector2(-6, 0));
-                var b = SiegeUiKit.Button(cell, "Button", names[i], SiegeUiKit.AeroAqua, () => SelectPortal(idx), 22);
+                var cell = SiegeUiKit.MakeRect(_portalBar, names[i], new Vector2(i / 3f, 0), new Vector2((i + 1) / 3f, 1), new Vector2(6, 0), new Vector2(-6, 0));
+                var b = SiegeUiKit.MakeButton(cell, "Button", names[i], SiegeUiKit.AeroAqua, () => SelectPortal(idx), 22);
                 _portalButtons.Add(b.GetComponent<Image>());
             }
 
             // unit buttons
             var units = Balance.Siege.units;
-            _bottomBar = SiegeUiKit.Rect(root, "Units", new Vector2(0.02f, 0f), new Vector2(0.98f, 0f), new Vector2(0, 12), new Vector2(0, 190));
+            _bottomBar = SiegeUiKit.MakeRect(root, "Units", new Vector2(0.02f, 0f), new Vector2(0.98f, 0f), new Vector2(0, 12), new Vector2(0, 190));
             SiegeUiKit.Panel(_bottomBar, "Bg", SiegeUiKit.AeroGlass);
             for (int i = 0; i < units.Length; i++)
             {
                 int idx = i;
-                var cell = SiegeUiKit.Rect(_bottomBar, units[i].id, new Vector2(i / (float)units.Length, 0), new Vector2((i + 1) / (float)units.Length, 1), new Vector2(8, 10), new Vector2(-8, -10));
-                var b = SiegeUiKit.Button(cell, "Button", "", SiegeUiKit.AeroLime, () => Buy(idx), 20);
+                var cell = SiegeUiKit.MakeRect(_bottomBar, units[i].id, new Vector2(i / (float)units.Length, 0), new Vector2((i + 1) / (float)units.Length, 1), new Vector2(8, 10), new Vector2(-8, -10));
+                var b = SiegeUiKit.MakeButton(cell, "Button", "", SiegeUiKit.AeroLime, () => Buy(idx), 20);
                 _unitButtons.Add(b);
                 _unitLabels.Add(b.GetComponentInChildren<Text>());
             }
