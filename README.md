@@ -181,6 +181,24 @@ The end screen shows everyone's damage, nape hits, ammo mined and loaded, and an
 
 Exact numbers live in `Assets/Cubestruction/Resources/Balance/tools.json`.
 
+### Titan Siege balance
+
+Tuning lives in `Resources/Balance/titan.json`. `python3 Tools/balance_sim.py titan` plays thousands of whole
+matches (Titan skill, defender skill, digging, hauling, turrets, RPGs, found guns, blocks/catches, nape hits,
+rage, regen) using numbers measured in-game with `-autotest -titanbench` (gun hit rates, wall break times).
+`titantune --write` refits Titan health for ~50% wins in every line-up:
+
+| Line-up | Titan wins | Avg match |
+|---|---:|---:|
+| VR Titan vs you + 4 bots | 47% | 4.2 min |
+| VR Titan vs 3 people + 2 bots | 49% | 4.2 min |
+| VR Titan vs 5 people | 49% | 4.3 min |
+| AI Titan vs you + 4 bots | 51% | 4.9 min |
+| AI Titan vs 3 people + 2 bots | 54% | 4.9 min |
+
+Titan health = 40,900 + 8,500 per defender (bots count 0.6), ×1.41 for the AI Titan; it regenerates 60/s after
+4 s untouched. Per hit: artillery 1,500, cannon 600, rocket pod 450, RPG 300, guns ~200 DPS each.
+
 ## Balance
 
 All balance data lives in three JSON files under `Assets/Cubestruction/Resources/Balance/` (`layers.json`, `tools.json`, `siege.json`).

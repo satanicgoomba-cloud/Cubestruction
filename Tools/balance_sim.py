@@ -14,6 +14,7 @@ Reads the same JSON balance files the Unity game loads
 Usage:
   python3 Tools/balance_sim.py mining [--players N] [--seed S]
   python3 Tools/balance_sim.py siege  [--runs N]
+  python3 Tools/balance_sim.py titan  [--runs N]   (Titan Siege win rates by line-up)
   python3 Tools/balance_sim.py all
 """
 import argparse, json, math, os, random, sys
@@ -381,9 +382,235 @@ def sim_siege(skill, seed=1, verbose=False):
     return "god", S["matchSeconds"]
 
 
+# ======================================================================================== TITAN SIEGE
+# Measured in-game with `-autotest -titanbench` (AI Titan, Mac build). Update these when the
+# map or the Titan's attacks change; the damage/HP/ammo numbers come from titan.json.
+TITAN_BENCH = {
+    # unopposed AI Titan: seconds to break wall 1, then town 1 + wall 2, then town 2 + wall 3
+    "breach": [59.0, 123.0, 140.0],
+    "town_share": [0.0, 0.30, 0.28],     # part of each leg spent crossing town (turrets can't reach early on)
+    "dig_voxels_per_s": 4.2,              # sledgehammer on the mine wall
+    "mine_cells_per_wall": 96 * 4 * 7,
+    # gun DPS on the Titan at 12 m / 35 m with every shot aimed (bench), before player accuracy
+    "gun_dps": {"Minigun": (204, 204), "Shotgun": (235, 126), "BoostBlaster": (75, 103), "PinballPopper": (210, 210),
+                "RippleDisc": (208, 224), "FireworkLauncher": (84, 0), "BloomMortar": (120, 0), "RailGun": (350, 350)},
+    "ai_block": 0.35,                      # share of RPGs the AI Titan blocks or catches (bench)
+}
+
+
+def load_titan():
+    return load("titan.json")
+
+
+def sim_titan_match(T, humans, bots, human_titan, rng, titan_skill=None, def_skill=None, verbose=False):
+    """One Titan Siege match, 0.5 s steps. Returns ('titan'|'defenders', seconds, info)."""
+    B = TITAN_BENCH
+    dt = 0.5
+    weapon_hit = {w["id"]: w["damage"] for w in T["weaponDamage"]}
+    gun_dps = {}
+    for gid, (near, far) in B["gun_dps"].items():
+        old = {"Minigun": 8.5, "Shotgun": 21, "BoostBlaster": 27, "PinballPopper": 30, "RippleDisc": 80,
+               "FireworkLauncher": 60, "BloomMortar": 120, "RailGun": 350}[gid]   # per-hit values the bench ran with
+        k = weapon_hit.get(gid, old) / old
+        gun_dps[gid] = ((near + far) / 2) * k
+    # --- the Titan
+    tsk = titan_skill if titan_skill is not None else (rng.uniform(0.3, 1.0) if human_titan else 0.5)
+    speed = (0.75 + 0.6 * tsk) if human_titan else rng.uniform(0.9, 1.1)     # vs the AI bench
+    block = (0.10 + 0.30 * tsk) if human_titan else B["ai_block"]                    # share of RPGs blocked or caught
+    deflect = (0.05 + 0.15 * tsk) if human_titan else 0.0                    # turret shots swatted
+    disrupt = (0.05 + 0.15 * tsk) if human_titan else 0.08                   # defender time lost to knocks/grabs at the wall
+    hp_max = T["baseHp"] + T["hpPerDefender"] * (humans + bots * T["botHpFactor"])
+    if not human_titan: hp_max *= T.get("aiHpMultiplier", 1.0)
+    hp = hp_max
+    last_hurt = -99.0
+    # --- defenders: skill, carried ammo, guns
+    D = []
+    for i in range(humans + bots):
+        human = i < humans
+        sk = def_skill if (def_skill is not None and human) else (rng.uniform(0.35, 1.0) if human else 0.45)
+        D.append({"human": human, "skill": sk, "balls": 0, "rockets": 0, "gun": None, "mined": 0,
+                  "mode": "dig", "t": 0.0, "slot": i % 4})
+    turrets = None
+    cap = {"cannon": T["cannon"]["capacity"], "artillery": T["artillery"]["capacity"], "rocket": T["rocketPod"]["capacity"]}
+    kinds = ["cannon", "artillery", "rocket", "cannon"]
+    cool = [0.0] * 4
+    p_gun = T["gunsPerMineWall"] / B["mine_cells_per_wall"]
+    t = 0.0
+    wall = 0
+    leg_t = 0.0
+    prep = T["prepSeconds"]
+    dmg_by = {"turret": 0.0, "rpg": 0.0, "gun": 0.0}
+    while True:
+        fighting = t >= prep
+        if turrets is None:
+            turrets = [0] * 4
+        # ---- the Titan advances (rage speeds it up)
+        frac = hp / hp_max
+        rage = 2 if frac <= 0.25 else 1 if frac <= 0.5 else 0
+        if fighting:
+            leg_t += dt * speed * (1 + 0.3 * rage)
+            if leg_t >= B["breach"][wall]:
+                wall += 1; leg_t = 0.0
+                if wall >= 3:
+                    return "titan", t, dict(hp=hp / hp_max, dmg=dmg_by)
+                turrets = [0] * 4      # the old wall's turrets are gone; defenders move up
+                for d in D: d["mode"] = "dig"
+        in_range = fighting and leg_t >= B["breach"][wall] * B["town_share"][wall]
+        at_wall = fighting and leg_t >= B["breach"][wall] * (B["town_share"][wall] + (1 - B["town_share"][wall]) * 0.15)
+        # ---- defenders
+        for d in D:
+            eff = 0.55 + 0.45 * d["skill"]
+            if at_wall and rng.random() < disrupt * dt: d["t"] = max(d["t"], 4.0)   # knocked off / grabbed: a few seconds lost
+            if d["t"] > 0: d["t"] -= dt; continue
+            k = kinds[d["slot"]]
+            need_rocket = k == "rocket"
+            carry = d["rockets"] if need_rocket else d["balls"]
+            # a human with a gun shoots whenever the Titan is in range and they carry nothing to load
+            if d["gun"] and in_range and carry == 0 and rng.random() < 0.6:
+                dmg = gun_dps[d["gun"]] * (0.35 + 0.5 * d["skill"]) * dt
+                if rng.random() < 0.05 * d["skill"]: dmg *= T["napeMultiplier"]
+                hp -= dmg; dmg_by["gun"] += dmg; last_hurt = t
+                continue
+            if d["mode"] == "dig":
+                v = B["dig_voxels_per_s"] * eff * dt
+                for _ in range(int(v) + (1 if rng.random() < v - int(v) else 0)):
+                    r = rng.random()
+                    if r < T["ballChance"]: d["balls"] = min(T["maxBalls"], d["balls"] + 1)
+                    elif r < T["ballChance"] + T["rocketChance"]: d["rockets"] = min(T["maxRockets"], d["rockets"] + 1)
+                    if d["human"] and d["gun"] is None and rng.random() < p_gun:
+                        d["gun"] = rng.choice(list(gun_dps))
+                carry = d["rockets"] if need_rocket else d["balls"]
+                full = turrets[d["slot"]] >= cap[k]
+                if carry >= 4 or (carry > 0 and in_range and not full):
+                    d["mode"] = "haul"; d["t"] = 2.0 / eff        # walk to the turret
+            elif d["mode"] == "haul":
+                if carry > 0 and turrets[d["slot"]] < cap[k]:
+                    turrets[d["slot"]] += 1
+                    if need_rocket: d["rockets"] -= 1
+                    else: d["balls"] -= 1
+                    d["t"] = 0.3
+                elif in_range and turrets[d["slot"]] > 0:
+                    d["mode"] = "fire"
+                else:
+                    d["mode"] = "dig"; d["t"] = 2.0 / eff
+            if d["mode"] == "fire":
+                s = d["slot"]
+                if turrets[s] > 0 and cool[s] <= 0 and in_range:
+                    turrets[s] -= 1
+                    cool[s] = T[{"cannon": "cannon", "artillery": "artillery", "rocket": "rocketPod"}[k]]["cooldown"]
+                    hit = rng.random() < (0.92 if k == "rocket" else 0.8 * (0.7 + 0.3 * d["skill"])) and rng.random() >= deflect
+                    if hit:
+                        dmg = T[{"cannon": "cannon", "artillery": "artillery", "rocket": "rocketPod"}[k]]["damage"]
+                        if rng.random() < 0.04: dmg *= T["napeMultiplier"]
+                        hp -= dmg; dmg_by["turret"] += dmg; last_hurt = t
+                # RPG between turret shots
+                if d["rockets"] > (2 if k == "rocket" else 0) and in_range and rng.random() < dt / 1.5:
+                    d["rockets"] -= 1
+                    if rng.random() < 0.55 + 0.35 * d["skill"]:
+                        dmg = T["rpgDamage"] * (T["blockMultiplier"] if rng.random() < block else 1.0)
+                        if rng.random() < 0.06 * d["skill"]: dmg *= T["napeMultiplier"]
+                        hp -= dmg; dmg_by["rpg"] += dmg; last_hurt = t
+                if turrets[s] == 0 and d["rockets"] <= (2 if k == "rocket" else 0):
+                    d["mode"] = "dig"; d["t"] = 2.0 / eff
+        for i in range(4): cool[i] -= dt
+        # ---- regen
+        if fighting and hp < hp_max and t - last_hurt > T["regenDelay"]:
+            hp = min(hp_max, hp + T["regenPerSecond"] * dt)
+        if hp <= 0:
+            return "defenders", t, dict(wall=wall, dmg=dmg_by)
+        t += dt
+        if t >= prep + T["matchSeconds"]:
+            return "defenders", t, dict(wall=wall, dmg=dmg_by, timeout=True)
+
+
+TITAN_SCENARIOS = [
+    ("VR Titan vs you + 4 bots", 1, 4, True),
+    ("VR Titan vs 3 people + 2 bots", 3, 2, True),
+    ("VR Titan vs 5 people", 5, 0, True),
+    ("AI Titan vs you + 4 bots", 1, 4, False),
+    ("AI Titan vs 3 people + 2 bots", 3, 2, False),
+]
+
+
+def sim_titan(runs=2000, seed=1, T=None, quiet=False):
+    T = T or load_titan()
+    rng = random.Random(seed)
+    out = []
+    for name, h, b, human_titan in TITAN_SCENARIOS:
+        tw = 0; times = []; timeouts = 0; walls = [0, 0, 0, 0]; parts = {"turret": 0, "rpg": 0, "gun": 0}
+        for _ in range(runs):
+            who, tt, info = sim_titan_match(T, h, b, human_titan, rng)
+            tw += who == "titan"; times.append(tt)
+            if info.get("timeout"): timeouts += 1
+            walls[info.get("wall", 3)] += 1
+            for k in parts: parts[k] += info["dmg"][k]
+        total = sum(parts.values()) or 1
+        rate = tw / runs
+        out.append((name, rate))
+        if not quiet:
+            print(f"  {name:32s} Titan wins {100*rate:4.0f}%   avg match {sum(times)/runs/60:4.1f} min   "
+                  f"defender wins at wall 1/2/3: {walls[0]*100//runs}/{walls[1]*100//runs}/{walls[2]*100//runs}%  "
+                  f"timeouts {100*timeouts//runs}%   damage: turrets {100*parts['turret']//total}% rpg {100*parts['rpg']//total}% guns {100*parts['gun']//total}%")
+    return out
+
+
+def titan_skill_table(runs=1000, seed=2, T=None):
+    """Titan win rate by Titan skill vs average defenders (you + 4 bots)."""
+    T = T or load_titan()
+    rng = random.Random(seed)
+    print("  Titan skill vs (you + 4 bots, your skill 0.6):")
+    for sk in (0.2, 0.4, 0.6, 0.8, 1.0):
+        w = sum(sim_titan_match(T, 1, 4, True, rng, titan_skill=sk, def_skill=0.6)[0] == "titan" for _ in range(runs))
+        print(f"    titan skill {sk:.1f}: wins {100*w/runs:3.0f}%")
+
+
+def tune_titan(runs=600, write=False):
+    """Fit Titan health so every line-up sits near 50%: scale base+per-defender HP for VR Titans
+    (then tilt between small and large teams), then the AI Titan's HP multiplier."""
+    T = load_titan()
+    def rate(h, b, human, seed):
+        rng = random.Random(seed)
+        return sum(sim_titan_match(T, h, b, human, rng)[0] == "titan" for _ in range(runs)) / runs
+    def bisect(apply, lo, hi, measure, steps=9):
+        for _ in range(steps):
+            mid = (lo + hi) / 2
+            apply(mid)
+            if measure() > 0.5: hi = mid      # Titan winning too often: less HP
+            else: lo = mid
+        apply((lo + hi) / 2)
+        return (lo + hi) / 2
+    base0, per0 = T["baseHp"], T["hpPerDefender"]
+    for it in range(3):
+        # overall HP level for VR Titans (average of small and large teams)
+        b0, p0 = T["baseHp"], T["hpPerDefender"]
+        bisect(lambda k: T.update(baseHp=b0 * k, hpPerDefender=p0 * k), 0.2, 6.0,
+               lambda: (rate(1, 4, True, 11) + rate(5, 0, True, 12)) / 2)
+        # tilt: if big teams win more than small teams, more HP per defender (and less base)
+        small, big = rate(1, 4, True, 13), rate(5, 0, True, 14)
+        tilt = 1.0 + max(-0.4, min(0.4, (small - big) * 1.5))
+        total5 = T["baseHp"] + 5 * T["hpPerDefender"]   # keep the 5-person total roughly where it was
+        T["hpPerDefender"] *= tilt
+        T["baseHp"] = max(1000.0, total5 - 5 * T["hpPerDefender"] * (1 + 0.0))
+        print(f"  pass {it + 1}: baseHp {T['baseHp']:.0f}  hpPerDefender {T['hpPerDefender']:.0f}   (1+4 bots {100*small:.0f}%, 5 people {100*big:.0f}%)")
+    bisect(lambda m: T.update(aiHpMultiplier=m), 0.3, 3.0, lambda: rate(1, 4, False, 15))
+    for key in ("baseHp", "hpPerDefender"):
+        T[key] = float(round(T[key] / 100.0) * 100)
+    T["aiHpMultiplier"] = round(T["aiHpMultiplier"], 2)
+    print(f"  fitted: baseHp {T['baseHp']:.0f}, hpPerDefender {T['hpPerDefender']:.0f}, aiHpMultiplier {T['aiHpMultiplier']}")
+    sim_titan(runs=1500, T=T)
+    titan_skill_table(T=T)
+    if write:
+        path = os.path.join(BAL, "titan.json")
+        with open(path) as f: d = json.load(f)
+        for key in ("baseHp", "hpPerDefender", "aiHpMultiplier"): d[key] = T[key]
+        with open(path, "w") as f: json.dump(d, f, indent=2)
+        print("  wrote", path)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["mining", "siege", "all", "table"])
+    ap.add_argument("mode", choices=["mining", "siege", "titan", "titantune", "all", "table"])
+    ap.add_argument("--write", action="store_true", help="titantune: save the fitted numbers to titan.json")
     ap.add_argument("--players", type=int, default=0)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--runs", type=int, default=8)
@@ -403,6 +630,13 @@ def main():
                 wins += w == "god"; times.append(tt)
             print(f"  skill {skill:.2f}: God wins {100*wins/a.runs:3.0f}%   avg end {sum(times)/len(times)/60:.1f} min")
         sim_siege(0.6, seed=0, verbose=True)
+    if a.mode == "titantune":
+        print("\n=== TITAN SIEGE tuning (fits HP for ~50% Titan wins)")
+        tune_titan(write=a.write)
+    if a.mode in ("titan", "all"):
+        print("\n=== TITAN SIEGE  (target: ~50% Titan wins in every line-up; matches ~5-8 min)")
+        sim_titan(runs=max(a.runs, 2000) if a.mode == "titan" else 500)
+        titan_skill_table()
 
 
 if __name__ == "__main__":

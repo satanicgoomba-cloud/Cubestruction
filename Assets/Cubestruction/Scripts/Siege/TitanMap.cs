@@ -158,6 +158,16 @@ namespace Cubestruction.Siege
             return door || window ? -1 : b.layer;
         }
 
+        /// <summary>Wall voxels are tougher (titan.json wallHpMultiplier, one per wall); the mine wall on top,
+        /// the battlements and the town are normal.</summary>
+        public static Func<int, int, int, float> HpMultiplier(float[] perWall) => (x, y, z) =>
+        {
+            if (perWall == null) return 1f;
+            for (int i = 0; i < Walls.Length && i < perWall.Length; i++)
+                if (z >= Walls[i].z0 && z < Walls[i].Z1 && y < Walls[i].height) return perWall[i];
+            return 1f;
+        };
+
         /// <summary>Cells defenders may dig: the mine wall on top of a wall (everything else is the Titan's to break).</summary>
         public static bool IsMine(int x, int y, int z)
         {

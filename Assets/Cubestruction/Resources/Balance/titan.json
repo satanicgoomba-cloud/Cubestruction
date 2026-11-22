@@ -1,0 +1,73 @@
+{
+  "notes": "Titan Siege tuning. Damage is per hit on the Titan. Tuned with Tools/balance_sim.py titan (Monte Carlo of whole matches using numbers measured in-game with -titanbench). wallHpMultiplier: per wall (1, 2, 3) voxel HP multiplier so walls take real punching (town, battlements stay normal; the mine wall on top is always normal).",
+  "prepSeconds": 40,
+  "matchSeconds": 600,
+  "baseHp": 40900.0,
+  "hpPerDefender": 8500.0,
+  "botHpFactor": 0.6,
+  "regenPerSecond": 60,
+  "regenDelay": 4,
+  "napeMultiplier": 3,
+  "blockMultiplier": 0.25,
+  "rpgDamage": 300,
+  "ballChance": 0.16,
+  "rocketChance": 0.11,
+  "maxBalls": 8,
+  "maxRockets": 10,
+  "gunsPerMineWall": 12,
+  "cannon": {
+    "capacity": 6,
+    "damage": 600,
+    "cooldown": 0.7
+  },
+  "artillery": {
+    "capacity": 3,
+    "damage": 1500,
+    "cooldown": 1.5
+  },
+  "rocketPod": {
+    "capacity": 4,
+    "damage": 450,
+    "cooldown": 1.0
+  },
+  "weaponDamage": [
+    {
+      "id": "Minigun",
+      "damage": 8.5
+    },
+    {
+      "id": "Shotgun",
+      "damage": 21
+    },
+    {
+      "id": "BoostBlaster",
+      "damage": 60
+    },
+    {
+      "id": "PinballPopper",
+      "damage": 30
+    },
+    {
+      "id": "RippleDisc",
+      "damage": 80
+    },
+    {
+      "id": "FireworkLauncher",
+      "damage": 150
+    },
+    {
+      "id": "BloomMortar",
+      "damage": 200
+    },
+    {
+      "id": "RailGun",
+      "damage": 350
+    }
+  ],
+  "wallHpMultiplier": [
+    100,
+    50,
+    22
+  ],
+  "aiHpMultiplier": 1.41
+}

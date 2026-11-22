@@ -28,24 +28,32 @@ namespace Cubestruction.Siege
         public Material partMaterial;
         /// <summary>Titan Siege is always at least this many defenders against one Titan: bots fill the gaps.</summary>
         public const int MinDefenders = 5;
+        /// <summary>-titanbench: force this many bots (-1 = normal).</summary>
+        public static int BotsOverride = -1;
         public const ulong AiTitanClient = ulong.MaxValue - 3;
         readonly List<DefenderBot> _bots = new List<DefenderBot>();
         TitanBot _aiTitan;
 
         // ---- tuning
         public const float Scale = 7f;                 // the Titan's world scale (~6.5 m tall)
-        public const float PrepSeconds = 40f, MatchSeconds = 600f;
-        public const float BaseHp = 3000f, HpPerDefender = 1200f;
-        public const float RpgDamage = 8f;
+        static TitanFile T => Balance.Titan;
+        public static float PrepSeconds => T.prepSeconds;
+        public static float MatchSeconds => T.matchSeconds;
+        public static float BaseHp => T.baseHp;
+        public static float HpPerDefender => T.hpPerDefender;
+        public static float RpgDamage => T.rpgDamage;
         public const float ScrapeRadius = 1.3f, ScrapeDamage = 20f;
         public const float PunchMinSpeed = 2.0f;       // real m/s of the hand (world speed / scale)
         public const float PunchDamage = 500f, KickDamage = 700f;
         /// <summary>Instigator id for the Titan's voxel damage (the only damage walls take in this mode).</summary>
         public const ulong TitanInstigator = ulong.MaxValue - 2;
-        public const int MaxBalls = 8, MaxRockets = 10;
-        public const float BallChance = 0.16f, RocketChance = 0.11f;   // per mined voxel
-        public const float NapeMultiplier = 3f, BlockMultiplier = 0.25f;
-        public const int GunsPerMineWall = 6;
+        public static int MaxBalls => T.maxBalls;
+        public static int MaxRockets => T.maxRockets;
+        public static float BallChance => T.ballChance;          // per mined voxel
+        public static float RocketChance => T.rocketChance;
+        public static float NapeMultiplier => T.napeMultiplier;
+        public static float BlockMultiplier => T.blockMultiplier;
+        public static int GunsPerMineWall => T.gunsPerMineWall;
         static readonly string[] WallGuns = { "Shotgun", "Minigun", "PinballPopper", "BoostBlaster", "RailGun", "FireworkLauncher", "RippleDisc", "BloomMortar" };
 
         public enum TurretKind : byte { Cannon = 0, Artillery = 1, Rocket = 2 }
@@ -55,10 +63,11 @@ namespace Cubestruction.Siege
             new TurretDef { kind = TurretKind.Cannon, x = -16f }, new TurretDef { kind = TurretKind.Artillery, x = -6f },
             new TurretDef { kind = TurretKind.Rocket, x = 6f },   new TurretDef { kind = TurretKind.Cannon, x = 16f },
         };
-        public static int Capacity(TurretKind k) => k == TurretKind.Cannon ? 6 : k == TurretKind.Artillery ? 3 : 4;
+        static TurretTuning Tune(TurretKind k) => k == TurretKind.Cannon ? T.cannon : k == TurretKind.Artillery ? T.artillery : T.rocketPod;
+        public static int Capacity(TurretKind k) => Tune(k).capacity;
         public static float LoadSeconds(TurretKind k) => k == TurretKind.Cannon ? 3f : k == TurretKind.Artillery ? 6f : 4f;
-        public static float ShotDamage(TurretKind k) => k == TurretKind.Cannon ? 25f : k == TurretKind.Artillery ? 80f : 40f;
-        public static float FireCooldown(TurretKind k) => k == TurretKind.Cannon ? 0.7f : k == TurretKind.Artillery ? 1.5f : 1.0f;
+        public static float ShotDamage(TurretKind k) => Tune(k).damage;
+        public static float FireCooldown(TurretKind k) => Tune(k).cooldown;
         public static string Name(TurretKind k) => k == TurretKind.Cannon ? "Cannon" : k == TurretKind.Artillery ? "Artillery" : "Rocket Pod";
         public const float TurretReach = 1.9f;
 
@@ -114,7 +123,7 @@ namespace Cubestruction.Siege
         class Stat { public string name; public float damage; public int nape, mined, loaded, guns; }
         readonly Dictionary<ulong, Stat> _stats = new Dictionary<ulong, Stat>();
         int _titanCatches, _titanThrows, _titanBlocks;
-        float _biteDeadline;
+        float _biteDeadline, _lastHurt;
         Stat StatOf(ulong id)
         {
             if (_stats.TryGetValue(id, out var st)) return st;
@@ -180,10 +189,10 @@ namespace Cubestruction.Siege
             cube.OnCellsDestroyedServer += OnCellsDestroyed;
             int defenders = 0;
             foreach (var p in players) if (p != titan) defenders++;
-            int botCount = Mathf.Max(0, MinDefenders - defenders);
+            int botCount = BotsOverride >= 0 ? BotsOverride : Mathf.Max(0, MinDefenders - defenders);
             titanClient.Value = titan ? titan.OwnerClientId : AiTitanClient;
             // bots are a bit weaker than people, so they add a bit less Titan health
-            titanMaxHp.Value = BaseHp + HpPerDefender * (defenders + botCount * 0.6f);
+            titanMaxHp.Value = (BaseHp + HpPerDefender * (defenders + botCount * T.botHpFactor)) * (titan ? 1f : T.aiHpMultiplier);
             titanHp.Value = titanMaxHp.Value;
             wall.Value = 0;
             rage.Value = 0;
@@ -414,6 +423,10 @@ namespace Cubestruction.Siege
                 BannerRpc(want == 2 ? "The Titan goes berserk!" : "The Titan is enraged! It's faster now...");
             }
 
+            // slow regeneration once the Titan hasn't been hurt for a few seconds
+            if (transformed.Value && titanHp.Value > 0 && titanHp.Value < titanMaxHp.Value && Time.time - _lastHurt > T.regenDelay)
+                titanHp.Value = Mathf.Min(titanMaxHp.Value, titanHp.Value + T.regenPerSecond * dt);
+
             var titan = Body;
             TrackHands(titan, dt);
             ServerLoadTurrets(dt);
@@ -619,8 +632,19 @@ namespace Cubestruction.Siege
             var titan = d.Body;
             if (!titan || CapsuleDistance(titan, pos) > 0.32f * titan.WorldScale + t.bulletSize * bulletScale) return false;
             BulletHits++;
-            d.ServerDamageTitan(Mathf.Clamp(t.damage * 0.25f, 1f, 30f), owner, IsNape(titan, pos));
+            d.ServerDamageTitan(T.WeaponHit(t), owner, IsNape(titan, pos));
             return true;
+        }
+
+        /// <summary>Server: a bullet burst (mortar bomblet, firework, explosive round) near the Titan: splash damage.</summary>
+        public static void ServerBulletBlast(Vector3 pos, float radiusM, ToolDef t, ulong owner)
+        {
+            var d = Instance;
+            if (d == null || !d.active.Value || owner == d.titanClient.Value) return;
+            var titan = d.Body;
+            if (!titan || CapsuleDistance(titan, pos) > radiusM + 0.32f * titan.WorldScale) return;
+            BulletHits++;
+            d.ServerDamageTitan(T.WeaponHit(t), owner, IsNape(titan, pos));
         }
 
         static float CapsuleDistance(TitanBody titan, Vector3 p)
@@ -705,6 +729,7 @@ namespace Cubestruction.Siege
             if (source != ulong.MaxValue) { var st = StatOf(source); st.damage += dmg; if (nape) st.nape++; }
             if (nape && PlayerAvatar.ByClient.TryGetValue(source, out var shooter)) shooter.ToastRpc("NAPE HIT! x3 damage");
             titanHp.Value = Mathf.Max(0, titanHp.Value - dmg);
+            _lastHurt = Time.time;
             var t = Titan;
             if (t) TitanHurtRpc(dmg);
         }
@@ -725,10 +750,10 @@ namespace Cubestruction.Siege
             if (!titan) return;
             float body = CapsuleDistance(titan, pos);
             if (body > Mathf.Max(radiusM * 1.5f, 1.2f) + 0.3f * Scale) return;
-            float dmg = t.id == "RocketLauncher" ? RpgDamage : Mathf.Max(2f, t.damage * 0.05f);
+            float dmg = t.id == "RocketLauncher" ? RpgDamage : Mathf.Max(2f, T.WeaponHit(t));
             // a rocket that bursts on the Titan's hand is blocked: a quarter of the damage
             float hand = Mathf.Min(Vector3.Distance(pos, titan.leftHand.position), Vector3.Distance(pos, titan.rightHand.position));
-            if (hand < 0.22f * titan.WorldScale && hand < body)
+            if (hand < 0.14f * titan.WorldScale && hand < body)
             {
                 dmg *= BlockMultiplier; Blocks++; d._titanBlocks++;
                 FxHub.Instance?.ShockwaveRpc(pos, 1.5f);
@@ -907,7 +932,9 @@ namespace Cubestruction.Siege
             if (d == null || !d.active.Value || rocket.Owner == d.titanClient.Value) return false;
             var titan = d.Body;
             if (!titan) return false;
-            float r = 0.2f * titan.WorldScale;
+            // the AI Titan only reacts to about a third of the rockets (the same ones its hands go up for)
+            if (titan.bot && rocket.NetworkObjectId % 100 >= 35) return false;
+            float r = 0.12f * titan.WorldScale;   // about a metre around the hand
             for (int h = 0; h < 2; h++)
             {
                 var hand = h == 0 ? titan.leftHand : titan.rightHand;
@@ -987,8 +1014,13 @@ namespace Cubestruction.Siege
 
         // ------------------------------------------------------------------ local world: side walls + turret models (every peer)
 
+        GameObject _kiosk;
+
         void SyncWorld(bool on)
         {
+            // the Mining arena's shop kiosk stands where the first town is: hide it during Titan Siege
+            if (_kiosk == null) _kiosk = GameObject.Find("ShopKiosk");
+            if (_kiosk) _kiosk.SetActive(!on);
             if (_blockers) Destroy(_blockers);
             foreach (var t in _turretVis) if (t) Destroy(t);
             _turretVis.Clear();

@@ -75,6 +75,12 @@ namespace Cubestruction
             yield return new WaitForSeconds(1f);
             NetBootstrap.Instance.HostLan(7790);   // own port, so a normal game can run alongside
             yield return Until(() => MatchManager.Instance != null && MatchManager.Instance.IsSpawned, 10f, "match manager spawned");
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-titanbench") >= 0)
+            {
+                yield return TitanBench();
+                Application.Quit(0);
+                yield break;
+            }
             MatchManager.Instance.ServerStartMatch(GameMode.Mining);
             yield return Until(() => PlayerAvatar.Local != null && VoxelCube.Instance != null && VoxelCube.Instance.IsSpawned
                                      && MatchManager.Instance.state.Value == MatchState.Playing, 10f, "mining match started");
@@ -1013,6 +1019,124 @@ namespace Cubestruction
             Application.Quit(_failures == 0 ? 0 : 1);
         }
 
+        Vector3? _aimAt;
+
+        /// <summary>-titanbench: measures what the Titan Siege simulator needs (logged as "[Bench]" lines):
+        /// each gun's hit rate and DPS on the Titan at two ranges, RPG and turret hit rates, and how long
+        /// the AI Titan takes to break each wall with nobody shooting.</summary>
+        IEnumerator TitanBench()
+        {
+            void B(string m) => Debug.Log("[Bench] " + m);
+            var mm = MatchManager.Instance;
+            var td = Siege.TitanDirector.Instance;
+            yield return Until(() => PlayerAvatar.Local != null, 10f, "player spawned");
+            var me = PlayerAvatar.Local;
+            MatchManager.ForceHumanTitan = false;
+            Siege.TitanDirector.BotsOverride = 0;
+            Siege.TitanBot.Frozen = true;
+            mm.ServerStartMatch(GameMode.TitanSiege);
+            yield return new WaitForSeconds(1.5f);
+            td.prepLeft.Value = 0.05f;
+            yield return new WaitForSeconds(2.5f);
+            var bot = Siege.TitanBot.Instance;
+            if (!bot) { B("no AI Titan"); yield break; }
+            var o = td.Origin;
+            td.titanMaxHp.Value = 1e6f; td.titanHp.Value = 1e6f;   // (floats: small enough that 8 damage still registers)
+            bool breachOnly = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-breachonly") >= 0;
+            var guns = new[] { "Minigun", "Shotgun", "BoostBlaster", "PinballPopper", "RippleDisc", "FireworkLauncher", "BloomMortar", "RailGun" };
+            foreach (var range in breachOnly ? new float[0] : new[] { 12f, 35f })
+            {
+                // put the Titan out in the field at this range from the wall-top spot
+                // at the front of the walkway, in a gap between battlements
+                var spot = new Vector3(Siege.TitanMap.CellX(o, 52.5f), o.y + Siege.TitanMap.Walls[0].height * Siege.TitanMap.CellSize + 0.3f, Siege.TitanMap.CellZ(o, Siege.TitanMap.Walls[0].z0 + 1.5f));
+                bot.Teleport(new Vector3(o.x, o.y + 0.2f, spot.z - range));
+                yield return new WaitForSeconds(0.5f);
+                foreach (var id in guns)
+                {
+                    var t = Balance.Tool(id);
+                    me.ownedTools.Value |= 1UL << t.index;
+                    me.Tools.SelectTool(t.index);
+                    me.Motor.Teleport(spot, 180f);
+                    _aimAt = Siege.TitanDirector.TitanChest(bot.Body);
+                    yield return new WaitForSeconds(0.6f);
+                    td.titanHp.Value = 1e6f;
+                    float hp0 = td.titanHp.Value; int f0 = Tools.Bullets.Fired, h0 = Siege.TitanDirector.BulletHits;
+                    bool auto = id == "Minigun" || id == "PinballPopper";
+                    _holdUse = true; _pulseUse = !auto;
+                    yield return new WaitForSeconds(5f);
+                    _holdUse = false; _pulseUse = false;
+                    yield return new WaitForSeconds(2f);
+                    float dmg = hp0 - td.titanHp.Value;
+                    int fired = Tools.Bullets.Fired - f0, hits = Siege.TitanDirector.BulletHits - h0;
+                    B($"gun {id} range {range} fired {fired} hits {hits} dps {dmg / 5f:0.0}");
+                }
+                // RPG
+                {
+                    var t = Balance.Tool("RocketLauncher");
+                    me.Tools.SelectTool(t.index);
+                    me.ammoRockets.Value = 30;
+                    me.Motor.Teleport(spot, 180f);
+                    _aimAt = Siege.TitanDirector.TitanChest(bot.Body);
+                    yield return new WaitForSeconds(0.6f);
+                    float hp0 = td.titanHp.Value; int bl0 = Siege.TitanDirector.Blocks, c0 = Siege.TitanDirector.Catches; int r0 = me.ammoRockets.Value;
+                    _holdUse = true; _pulseUse = true;
+                    yield return new WaitForSeconds(8f);
+                    _holdUse = false; _pulseUse = false;
+                    yield return new WaitForSeconds(3f);
+                    B($"rpg range {range} fired {r0 - me.ammoRockets.Value} damage {hp0 - td.titanHp.Value:0} blocks {Siege.TitanDirector.Blocks - bl0} catches {Siege.TitanDirector.Catches - c0}");
+                }
+                // turrets
+                for (int k = 0; k < 4; k++)
+                {
+                    float hp0 = td.titanHp.Value; int s0 = Siege.TitanDirector.ShotsFired, h0 = Siege.TitanDirector.ShotsHit, d0 = Siege.TitanDirector.Deflects;
+                    for (int n = 0; n < 3; n++) { td.ammo[k] = 3; td.ServerFireTurret(k); yield return new WaitForSeconds(Siege.TitanDirector.FireCooldown(td.KindOf(k)) + 0.1f); }
+                    yield return new WaitForSeconds(3f);
+                    B($"turret {td.KindOf(k)} range {range} fired {Siege.TitanDirector.ShotsFired - s0} hits {Siege.TitanDirector.ShotsHit - h0} deflects {Siege.TitanDirector.Deflects - d0} damage {hp0 - td.titanHp.Value:0}");
+                }
+            }
+            _aimAt = null;
+
+            // dig rate with the sledgehammer
+            if (!breachOnly)
+            {
+                var t = Balance.Tool("SledgeHammer");
+                me.ownedTools.Value |= 1UL << t.index;
+                me.Tools.SelectTool(t.index);
+                me.ammoBalls.Value = 0; me.ammoRockets.Value = 0;
+                var map = VoxelCube.Instance;
+                me.Motor.Teleport(Siege.TitanMap.MineFace(o, 0, -10f) + Vector3.up * 0.2f, 0f);
+                _aim = Quaternion.identity; _pitch = 5f;
+                yield return new WaitForSeconds(0.4f);
+                int v0 = map.alive.Value;
+                _holdUse = true;
+                yield return new WaitForSeconds(10f);
+                _holdUse = false; _pitch = 0f;
+                B($"dig 10 s voxels {v0 - map.alive.Value} balls {me.ammoBalls.Value} rockets {me.ammoRockets.Value} guns {Siege.TitanDirector.GunsFound}");
+            }
+
+            // breach times, nobody shooting, 4x speed
+            bot.Teleport(Siege.TitanMap.TitanStart(o));
+            Siege.TitanBot.Frozen = false;
+            Time.timeScale = 4f;
+            float start = Time.time;
+            int lastWall = td.wall.Value;
+            float lastAt = start, logAt = start;
+            var cubeB = VoxelCube.Instance;
+            while (Time.time - start < 1200f && mm.state.Value == MatchState.Playing)
+            {
+                if (Time.time - logAt > 30f) { logAt = Time.time; B($"t {Time.time - start:0} z {bot.transform.position.z:0.0} punches {Siege.TitanBot.Punches} kicks {Siege.TitanDirector.Kicks} voxels {cubeB.alive.Value} unsticks {Siege.TitanBot.Unsticks} shuffles {Siege.TitanBot.Shuffles}"); }
+                td.titanHp.Value = 1e6f;
+                if (td.wall.Value != lastWall)
+                {
+                    B($"breach wall {lastWall + 1} at {Time.time - start:0} s (+{Time.time - lastAt:0} s)");
+                    lastWall = td.wall.Value; lastAt = Time.time;
+                }
+                yield return null;
+            }
+            B($"end: state {mm.state.Value} result '{mm.resultText.Value}' after {Time.time - start:0} s, wall {td.wall.Value + 1}, titan z {bot.transform.position.z:0}");
+            Time.timeScale = 1f;
+        }
+
         IEnumerator Until(System.Func<bool> cond, float timeout, string what)
         {
             float t = 0;
@@ -1034,6 +1158,7 @@ namespace Cubestruction
             var me = PlayerAvatar.Local;
             if (me == null || me.Tools == null) return;
             if (_swing) { me.Tools.swingHeld = true; me.Tools.swingAim = _swingAim; }
+            if (_aimAt.HasValue && _holdUse) { LookAt(me, _aimAt.Value); _aim = me.transform.rotation; _pitch = me.headAnchor.localEulerAngles.x > 180 ? me.headAnchor.localEulerAngles.x - 360 : me.headAnchor.localEulerAngles.x; }
             if (_reel) me.Motor.reelIn = true;
             if (_pump != Vector3.zero) me.Motor.moveIntent = _pump;
             if (_holdUse)

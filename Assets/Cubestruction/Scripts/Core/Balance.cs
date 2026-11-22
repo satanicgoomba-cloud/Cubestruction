@@ -160,15 +160,41 @@ namespace Cubestruction
         public UnitDef[] units;
     }
 
+    [Serializable] public class TurretTuning { public int capacity; public float damage; public float cooldown; }
+    [Serializable] public class WeaponDamage { public string id; public float damage; }
+
+    /// <summary>Resources/Balance/titan.json (Titan Siege). Tuned with Tools/balance_sim.py titan.</summary>
+    [Serializable] public class TitanFile
+    {
+        public float prepSeconds = 40, matchSeconds = 600;
+        public float baseHp, hpPerDefender, botHpFactor = 0.6f, regenPerSecond, regenDelay = 4;
+        /// <summary>The AI Titan's health multiplier (it's less nimble than a person in VR).</summary>
+        public float aiHpMultiplier = 1f;
+        public float napeMultiplier = 3, blockMultiplier = 0.25f, rpgDamage;
+        public float ballChance, rocketChance; public int maxBalls = 8, maxRockets = 10, gunsPerMineWall = 6;
+        public TurretTuning cannon, artillery, rocketPod;
+        public WeaponDamage[] weaponDamage;
+        /// <summary>Per wall (1, 2, 3) voxel HP multiplier in Titan Siege (not the mine walls, not the town).</summary>
+        public float[] wallHpMultiplier;
+
+        /// <summary>Damage one hit from this tool's bullets does to the Titan.</summary>
+        public float WeaponHit(ToolDef t)
+        {
+            foreach (var w in weaponDamage) if (w.id == t.id) return w.damage;
+            return Mathf.Clamp(t.damage * 0.25f, 1f, 30f);
+        }
+    }
+
     public static class Balance
     {
-        static LayerFile _layers; static ToolFile _tools; static SiegeFile _siege;
+        static LayerFile _layers; static ToolFile _tools; static SiegeFile _siege; static TitanFile _titan;
         static Dictionary<string, ToolDef> _toolById;
 
         public static LayerFile Layers { get { Load(); return _layers; } }
         public static ToolFile ToolsFile { get { Load(); return _tools; } }
         public static ToolDef[] Tools { get { Load(); return _tools.tools; } }
         public static SiegeFile Siege { get { Load(); return _siege; } }
+        public static TitanFile Titan { get { Load(); return _titan; } }
 
         public static ToolDef Tool(string id) { Load(); return _toolById.TryGetValue(id, out var t) ? t : null; }
         public static ToolDef Tool(int index) { Load(); return index >= 0 && index < _tools.tools.Length ? _tools.tools[index] : null; }
@@ -179,6 +205,7 @@ namespace Cubestruction
             _layers = Parse<LayerFile>("Balance/layers");
             _tools = Parse<ToolFile>("Balance/tools");
             _siege = Parse<SiegeFile>("Balance/siege");
+            _titan = Parse<TitanFile>("Balance/titan");
             foreach (var l in _layers.layers)
                 l.unityColor = ColorUtility.TryParseHtmlString(l.color, out var c) ? c : Color.magenta;
             _toolById = new Dictionary<string, ToolDef>();

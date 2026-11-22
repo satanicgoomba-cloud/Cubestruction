@@ -30,8 +30,12 @@ namespace Cubestruction.Voxels
 
         /// <param name="shape">Optional map: returns the layer index of cell (x, y, z), or -1 for empty.
         /// Without it the grid is a full cube layered by depth (Mining / God Siege).</param>
-        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null, int ny = -1, int nz = -1)
+        /// <summary>Optional per-cell HP multiplier by position (Titan Siege walls); kept so Restore/MaxHp agree.</summary>
+        readonly Func<int, int, int, float> hpMul;
+
+        public VoxelGrid(int n, float hpScale = 1f, Func<int, int, int, int> shape = null, int ny = -1, int nz = -1, Func<int, int, int, float> hpMul = null)
         {
+            this.hpMul = hpMul;
             N = NX = n; NY = ny > 0 ? ny : n; NZ = nz > 0 ? nz : n;
             this.hpScale = hpScale;
             int count = NX * NY * NZ;
@@ -62,7 +66,7 @@ namespace Cubestruction.Voxels
                 }
                 int idx = Index(x, y, z);
                 layer[idx] = (byte)li;
-                hp[idx] = L[li].hp * hpScale;
+                hp[idx] = L[li].hp * hpScale * (hpMul != null ? hpMul(x, y, z) : 1f);
                 solid[idx] = true;
                 alive++;
                 if (y + 1 > top) top = y + 1;
@@ -81,7 +85,7 @@ namespace Cubestruction.Voxels
         public bool IsSolid(int x, int y, int z) => InBounds(x, y, z) && solid[Index(x, y, z)];
         public bool IsSolid(Vector3Int c) => IsSolid(c.x, c.y, c.z);
         public LayerDef LayerOf(int idx) => Balance.Layers.layers[layer[idx]];
-        public float MaxHp(int idx) => LayerOf(idx).hp * hpScale;
+        public float MaxHp(int idx) { var c = Coord(idx); return LayerOf(idx).hp * hpScale * (hpMul != null ? hpMul(c.x, c.y, c.z) : 1f); }
 
         public bool IsExposed(int x, int y, int z)
         {

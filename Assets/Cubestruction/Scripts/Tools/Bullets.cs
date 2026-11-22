@@ -97,6 +97,7 @@ namespace Cubestruction.Tools
                 b.age += dt;
                 if (alive && b.def.splitAfterS > 0 && b.age >= b.def.splitAfterS && !b.burrowing)
                 {
+                    if (b.authority) Siege.TitanDirector.ServerBulletBlast(b.pos, 2f * b.scale, b.def, b.owner);   // the shell bursts
                     Split(b, b.pos, Vector3.zero);   // fireworks: burst in the air
                     alive = false;
                 }
@@ -147,6 +148,7 @@ namespace Cubestruction.Tools
             var cube = VoxelCube.Instance;
             if (b.authority && cube && cube.IsSpawned)
                 cube.ServerDamage(b.pos, b.def.radiusCells, b.def.damage, b.def.tier, true, b.owner);
+            if (b.authority) Siege.TitanDirector.ServerBulletBlast(b.pos, b.def.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, b.def, b.owner);
             FxHub.Instance?.LocalBlast(b.pos, b.def.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, BulletColor(b.def));
         }
 
@@ -218,6 +220,7 @@ namespace Cubestruction.Tools
             if (t.explodeOnImpact)
             {
                 if (b.authority && cube && cube.IsSpawned) cube.ServerDamage(point, t.radiusCells, t.damage, t.tier, true, b.owner);
+                if (b.authority) Siege.TitanDirector.ServerBulletBlast(point, t.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, t, b.owner);
                 FxHub.Instance?.LocalBlast(point, t.radiusCells * (cube ? cube.cellSize : 0.25f) * b.scale, BulletColor(t));
                 b.pos = point;
                 return false;
