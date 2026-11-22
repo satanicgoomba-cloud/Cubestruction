@@ -268,7 +268,7 @@ namespace Cubestruction.Voxels
             foreach (var idx in cells) { Grid.Restore(idx); MarkDirty(idx); }
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         void RequestFullStateRpc(RpcParams p = default)
         {
             var packed = Grid.PackSolid();

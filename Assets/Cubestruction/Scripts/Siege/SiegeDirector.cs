@@ -235,7 +235,7 @@ namespace Cubestruction.Siege
 
         // ------------------------------------------------------------------ commander RPCs
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void BuyUnitRpc(int unitIndex, int portal, RpcParams p = default)
         {
             if (!active.Value || !SenderHasRole(p, PlayerRole.Commander, out _)) return;
@@ -257,7 +257,7 @@ namespace Cubestruction.Siege
             return true;
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void CastSkillRpc(int skillIndex, Vector3 point, RpcParams p = default)
         {
             if (!active.Value || !SenderHasRole(p, PlayerRole.God, out _)) return;
@@ -301,7 +301,7 @@ namespace Cubestruction.Siege
             FxHub.Instance?.ExplosionRpc(point, s.radiusM, -1, false);
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void GrabRpc(NetworkObjectReference unitRef, bool left, RpcParams p = default)
         {
             if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;
@@ -314,7 +314,7 @@ namespace Cubestruction.Siege
             unit.ServerGrab(god, left);
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void ReleaseRpc(NetworkObjectReference unitRef, Vector3 velocity, RpcParams p = default)
         {
             if (!SenderHasRole(p, PlayerRole.God, out var god)) return;
@@ -323,7 +323,7 @@ namespace Cubestruction.Siege
             unit.ServerRelease(Vector3.ClampMagnitude(velocity, 35f));
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void SlapRpc(NetworkObjectReference unitRef, Vector3 handVelocity, RpcParams p = default)
         {
             if (!active.Value || !SenderHasRole(p, PlayerRole.God, out var god)) return;

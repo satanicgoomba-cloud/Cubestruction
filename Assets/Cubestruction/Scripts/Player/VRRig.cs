@@ -22,7 +22,7 @@ namespace Cubestruction.Player
         public Material vignetteMaterial;
 
         public Camera Cam { get; private set; }
-        public HandState Left = new HandState(), Right = new HandState();
+        [System.NonSerialized] public HandState Left = new HandState(), Right = new HandState();   // runtime state only
 
         PlayerAvatar _avatar;
         PlayerMotor _motor;

@@ -53,7 +53,7 @@ namespace Cubestruction
 
         // ------------------------------------------------------------------ server API
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestStartRpc(GameMode m, RpcParams p = default)
         {
             // only the host may start
@@ -125,7 +125,7 @@ namespace Cubestruction
             if (mode.Value == GameMode.GodSiege) SiegeDirector.Instance.ServerEnd();
         }
 
-        [Rpc(SendTo.Server, RequireOwnership = false)]
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestLobbyRpc(RpcParams p = default)
         {
             if (p.Receive.SenderClientId != NetworkManager.ServerClientId) return;
