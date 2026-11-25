@@ -2,12 +2,12 @@ using UnityEngine;
 
 namespace Cubestruction
 {
-    public enum GameMode : byte { Mining = 0, GodSiege = 1, TitanSiege = 2 }
+    public enum GameMode : byte { Mining = 0, GodSiege = 1, TitanSiege = 2, Super = 3, Sandbox = 4 }
     public enum MatchState : byte { Lobby = 0, Playing = 1, Ended = 2 }
     public enum Platform : byte { Desktop = 0, Mobile = 1, VR = 2 }
     /// <summary>Miner: Mining. God / Commander (minion caster) / Raider (on-foot attacker): God Siege.
-    /// Titan / Defender: Titan Siege.</summary>
-    public enum PlayerRole : byte { Miner = 0, God = 1, Commander = 2, Raider = 3, Titan = 4, Defender = 5 }
+    /// Titan / Defender: Titan Siege. Fighter: SUPER! and Sandbox.</summary>
+    public enum PlayerRole : byte { Miner = 0, God = 1, Commander = 2, Raider = 3, Titan = 4, Defender = 5, Fighter = 6 }
 
     public static class Roles
     {
@@ -17,6 +17,8 @@ namespace Cubestruction
         public static bool CanShop(PlayerRole r) => r == PlayerRole.Miner || r == PlayerRole.Raider;
         /// <summary>Giants that explosions and pads don't push around.</summary>
         public static bool IsGiant(PlayerRole r) => r == PlayerRole.God || r == PlayerRole.Titan;
+        /// <summary>SUPER! and Sandbox: anime fighters (no tools, no shop).</summary>
+        public static bool IsFighterMode(GameMode m) => m == GameMode.Super || m == GameMode.Sandbox;
     }
 
     /// <summary>VR movement options (all of them also allow climbing with grip).</summary>
@@ -41,6 +43,8 @@ namespace Cubestruction
         /// <see cref="HotbarMax"/> tools are usable: pinned ones first, then the rest in shop order.</summary>
         public static string HotbarPins { get => PlayerPrefs.GetString("hotbarPins", ""); set => PlayerPrefs.SetString("hotbarPins", value); }
         public const int HotbarMax = 16, HotbarRow = 8;
+        /// <summary>SUPER! fighter picked on the character select (index into Super.Roster).</summary>
+        public static int Fighter { get => PlayerPrefs.GetInt("fighter", 0); set => PlayerPrefs.SetInt("fighter", value); }
         public static bool AllowRagdoll { get => PlayerPrefs.GetInt("ragdoll", 1) == 1; set => PlayerPrefs.SetInt("ragdoll", value ? 1 : 0); }
     }
 

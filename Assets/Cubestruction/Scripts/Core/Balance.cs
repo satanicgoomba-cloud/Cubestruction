@@ -47,6 +47,8 @@ namespace Cubestruction
         public float damage;
         public float radiusCells;
         public float cooldown;
+        /// <summary>Streak items: seconds before you can use it again (bought once, then it recharges).</summary>
+        public float recharge;
         public int tier;
         public bool twoHanded;
         public float rangeM;

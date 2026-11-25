@@ -109,7 +109,8 @@ namespace Cubestruction.Player
             // a killstreak view (Raptor laptop, heli seat) drives camera + input while it's up
             bool menus = uiMenus || Tools.StreakState.TakesOverInput;
             bool cursorFree = uiMenus || (Tools.StreakState.TakesOverInput && Tools.StreakState.WantsCursor);
-            if (_shop.WasPressedThisFrame() && !Tools.StreakState.TakesOverInput) UI.GameMenus.Instance?.ToggleShop();
+            bool fighter = _avatar.role.Value == PlayerRole.Fighter;   // SUPER!: FighterController owns the buttons
+            if (_shop.WasPressedThisFrame() && !Tools.StreakState.TakesOverInput && !fighter) UI.GameMenus.Instance?.ToggleShop();
             if (!Application.isMobilePlatform && cursorFree != CursorFree) LockCursor(!cursorFree);
             if (_motor.Frozen || menus)
             {
@@ -131,7 +132,7 @@ namespace Cubestruction.Player
             // ---- move
             Vector2 mv = Vector2.ClampMagnitude(_move.ReadValue<Vector2>() + MobileInput.Move, 1f);
             Vector3 fwd = transform.forward, right = transform.right;
-            bool climbKey = _climb.IsPressed() || MobileInput.ClimbHeld;
+            bool climbKey = !fighter && (_climb.IsPressed() || MobileInput.ClimbHeld);
             if (climbKey && WallAhead(out var normal))
             {
                 // spider-climb: forward = up the wall, strafe = along it
@@ -149,18 +150,18 @@ namespace Cubestruction.Player
                 _motor.moveIntent = fwd * mv.y + right * mv.x;
             }
             _motor.sprint = _sprint.IsPressed() || MobileInput.Sprint;
-            _motor.jetHeld = _jet.IsPressed() || (MobileInput.Jump && !_motor.Grounded);
+            _motor.jetHeld = !fighter && (_jet.IsPressed() || (MobileInput.Jump && !_motor.Grounded));
             if (_jump.WasPressedThisFrame() || MobileInput.Jump) _motor.Jump();
 
             // ---- swing (Zip Tether): hold to hang on, jump reels in, release to fling
-            _avatar.Tools.swingHeld = _swing.IsPressed() || MobileInput.SwingHeld;
+            _avatar.Tools.swingHeld = !fighter && (_swing.IsPressed() || MobileInput.SwingHeld);
             _avatar.Tools.swingAim = AimRay;
             _avatar.Tools.swingHand = _avatar.rightHand;
             _motor.reelIn = _motor.IsGrappling && (_jump.IsPressed() || MobileInput.JumpHeld);
 
             // ---- tools (a super mode may own the Use button)
             UseHeld = _use.IsPressed() || MobileInput.UseHeld;
-            _avatar.Tools.SetTriggers(false, UseHeld && !Tools.StreakState.BlocksTools);
+            _avatar.Tools.SetTriggers(false, UseHeld && !Tools.StreakState.BlocksTools && !fighter);
             float sc = _scroll.ReadValue<float>();
             if (sc > 0.1f || _next.WasPressedThisFrame()) _avatar.Tools.CycleHand(false, +1);
             if (sc < -0.1f || _prev.WasPressedThisFrame()) _avatar.Tools.CycleHand(false, -1);

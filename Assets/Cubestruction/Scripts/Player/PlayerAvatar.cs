@@ -44,6 +44,8 @@ namespace Cubestruction.Player
         public readonly NetworkVariable<int> voxels = new NetworkVariable<int>();
         public readonly NetworkVariable<ulong> ownedTools = new NetworkVariable<ulong>();
         public NetworkList<int> charges;
+        /// <summary>Per tool: server time when a recharging big move (streak item) is ready again.</summary>
+        public NetworkList<float> readyAt;
         /// <summary>Titan Siege: cannonballs and rockets dug out of the mine wall (carried to turrets / fired by the RPG).</summary>
         public readonly NetworkVariable<int> ammoBalls = new NetworkVariable<int>();
         public readonly NetworkVariable<int> ammoRockets = new NetworkVariable<int>();
@@ -59,6 +61,7 @@ namespace Cubestruction.Player
         void Awake()
         {
             charges = new NetworkList<int>();
+            readyAt = new NetworkList<float>();
             Motor = GetComponent<PlayerMotor>();
             Tools = GetComponent<ToolController>();
             Ragdoll = GetComponent<PlayerRagdoll>();
@@ -72,6 +75,8 @@ namespace Cubestruction.Player
             {
                 charges.Clear();
                 for (int i = 0; i < Balance.Tools.Length; i++) charges.Add(0);
+                readyAt.Clear();
+                for (int i = 0; i < Balance.Tools.Length; i++) readyAt.Add(0f);
                 ServerResetForMatch(PlayerRole.Miner);
             }
             ownedTools.OnValueChanged += (_, __) => OnInventoryChanged?.Invoke();
@@ -110,6 +115,8 @@ namespace Cubestruction.Player
             if (cmd) cmd.enabled = r == PlayerRole.Commander;
             if (titan) titan.enabled = r == PlayerRole.Titan;
             if (def) def.enabled = r == PlayerRole.Defender;
+            var fighter = GetComponent<Super.FighterController>();
+            if (fighter) fighter.enabled = r == PlayerRole.Fighter;
             // (the Titan starts Buddy-sized; TitanController grows it when it bites its hand)
             Motor.WorldScale = r == PlayerRole.God ? Balance.Siege.god.scale : 1f;
         }
@@ -127,6 +134,31 @@ namespace Cubestruction.Player
             money.Value = 0; earned.Value = 0; voxels.Value = 0;
             ownedTools.Value = 1UL << Balance.Tool("Pickaxe").index;
             for (int i = 0; i < charges.Count; i++) charges[i] = 0;
+            for (int i = 0; i < readyAt.Count; i++) readyAt[i] = 0f;
+        }
+
+        /// <summary>Seconds until a recharging big move can be used again (0 = ready).</summary>
+        public float RechargeLeft(int toolIndex)
+        {
+            if (toolIndex < 0 || toolIndex >= readyAt.Count || NetworkManager == null) return 0f;
+            return Mathf.Max(0f, readyAt[toolIndex] - (float)NetworkManager.ServerTime.Time);
+        }
+
+        /// <summary>Server: start a big move's recharge. False if it's still recharging.</summary>
+        public bool ServerStartRecharge(int toolIndex)
+        {
+            var t = Balance.Tool(toolIndex);
+            if (t == null || toolIndex >= readyAt.Count) return false;
+            if (RechargeLeft(toolIndex) > 0.05f) return false;
+            readyAt[toolIndex] = (float)NetworkManager.ServerTime.Time + t.recharge;
+            return true;
+        }
+
+        /// <summary>Server (tests, loot): own a big move and have it ready now.</summary>
+        public void ServerGrantReady(int toolIndex)
+        {
+            ownedTools.Value |= 1UL << toolIndex;
+            if (toolIndex < readyAt.Count) readyAt[toolIndex] = 0f;
         }
 
         public void ServerAddMoney(int amount)

@@ -121,6 +121,13 @@ namespace Cubestruction.Tools
         public float CooldownFrac(int toolIndex, out float secondsLeft)
         {
             secondsLeft = 0; float frac = 0;
+            var rt = Balance.Tool(toolIndex);
+            if (rt != null && rt.recharge > 0)
+            {
+                // big moves recharge per tool, whichever hand (if any) holds them
+                secondsLeft = _avatar.RechargeLeft(toolIndex);
+                return Mathf.Clamp01(secondsLeft / rt.recharge);
+            }
             foreach (var h in new[] { _left, _right })
             {
                 if ((h.isLeft ? leftTool.Value : rightTool.Value) != toolIndex || h.cooldown <= 0) continue;
@@ -882,7 +889,8 @@ namespace Cubestruction.Tools
             bool personal = t.id == "AquaSurge" || t.id == "MeteorDive" || t.id == "SunOrb" || t.id == "TitanBuddy";
             if (personal && SuperActive) { DenyRpc("Finish your current super first."); return; }
             if (t.id == "EchoClones" && clonesOn.Value) { DenyRpc("Your clones are already out."); return; }
-            if (!_avatar.ServerConsumeCharge(tool)) return;
+            if (t.consumable ? !_avatar.ServerConsumeCharge(tool) : !_avatar.Owns(tool)) return;
+            if (!t.consumable && t.recharge > 0 && !_avatar.ServerStartRecharge(tool)) { DenyRpc($"{t.name} is recharging: {Mathf.CeilToInt(_avatar.RechargeLeft(tool))}s"); return; }
             switch (t.id)
             {
                 case "RaptorLaptop":

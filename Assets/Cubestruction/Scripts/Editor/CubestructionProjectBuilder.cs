@@ -56,7 +56,8 @@ namespace Cubestruction.EditorTools
             _explosive = explosive;
             _titanBot = BuildTitanBotPrefab();
             _defenderBot = BuildDefenderBotPrefab();
-            var list = BuildPrefabList(new[] { player, cube, explosive, heli, _titanBot, _defenderBot }.Concat(units).ToArray());
+            _fighterBot = BuildFighterBotPrefab();
+            var list = BuildPrefabList(new[] { player, cube, explosive, heli, _titanBot, _defenderBot, _fighterBot }.Concat(units).ToArray());
             BuildScene(player, cube, units, list, mats);
             AssetDatabase.SaveAssets();
             Debug.Log("<color=#3cf>Cubestruction:</color> build complete. Open Assets/Cubestruction/Scenes/Cubestruction.unity and press Play " +
@@ -355,10 +356,30 @@ namespace Cubestruction.EditorTools
             go.AddComponent<CommanderController>().enabled = false;
             go.AddComponent<TitanController>().enabled = false;
             go.AddComponent<DefenderController>().enabled = false;
+            go.AddComponent<Cubestruction.Super.FighterState>();
+            go.AddComponent<Cubestruction.Super.FighterController>().enabled = false;
+            go.AddComponent<Cubestruction.Super.FighterVisual>();
             return SavePrefab(go, "Player");
         }
 
-        static GameObject _explosive, _titanBot, _defenderBot;
+        static GameObject _explosive, _titanBot, _defenderBot, _fighterBot;
+
+        /// <summary>SUPER! bot: a Buddy moved by the server (FighterBot), with its own FighterState.</summary>
+        static GameObject BuildFighterBotPrefab()
+        {
+            var go = new GameObject("FighterBot");
+            go.AddComponent<NetworkObject>();
+            go.AddComponent<NetworkTransform>();
+            go.AddComponent<Cubestruction.Super.FighterState>();
+            go.AddComponent<Cubestruction.Super.FighterBot>();
+            go.AddComponent<Cubestruction.Super.FighterVisual>();
+            var vis = new GameObject("Visual").transform;
+            vis.SetParent(go.transform, false);
+            var buddy = InstantiateModel("Buddy", vis, PrimitiveType.Capsule, new Vector3(0.4f, 0.5f, 0.4f));
+            buddy.name = "Buddy";
+            foreach (var c in buddy.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+            return SavePrefab(go, "FighterBot");
+        }
 
         /// <summary>AI Titan: server-driven capsule (same shape as a player, scaled up at spawn); TitanVisual
         /// adds the rigged model on every peer.</summary>
@@ -538,6 +559,10 @@ namespace Cubestruction.EditorTools
             var td = tdGo.AddComponent<TitanDirector>();
             td.explosivePrefab = _explosive; td.titanBotPrefab = _titanBot; td.defenderBotPrefab = _defenderBot;
             td.partMaterial = mats.pedestal;
+
+            var superGo = new GameObject("SuperDirector");
+            superGo.AddComponent<NetworkObject>();
+            superGo.AddComponent<Cubestruction.Super.SuperDirector>().botPrefab = _fighterBot;
 
             var fxGo = new GameObject("FxHub");
             fxGo.AddComponent<NetworkObject>();

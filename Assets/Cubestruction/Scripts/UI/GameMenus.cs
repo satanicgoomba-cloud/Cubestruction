@@ -22,7 +22,7 @@ namespace Cubestruction.UI
     /// (laser pointer) and a small hotbar strip at the bottom of the view.
     /// Before a player is spawned it also owns a menu camera (and a tracked menu rig in VR).
     /// </summary>
-    public class GameMenus : MonoBehaviour
+    public partial class GameMenus : MonoBehaviour
     {
         public static GameMenus Instance { get; private set; }
 
@@ -195,7 +195,7 @@ namespace Cubestruction.UI
 
         void BuildMain()
         {
-            _main = Screen_("Main", new Vector2(980, 900));
+            _main = Screen_("Main", new Vector2(980, 980));
             var col = Column(_main);
             Title(col, "CUBESTRUCTION", 76);
             AeroTheme.Label(col, "Climb it. Mine it. Blow it up. Clear every last pixel.", 24).Size(36);
@@ -235,6 +235,7 @@ namespace Cubestruction.UI
                 NetBootstrap.Instance?.JoinLan(_ipField.text, 0);
             }, AeroPalette.SkyDeep, 22);
 
+            BuildSoloRow(col);
             var bottom = AeroTheme.HRow(col, "Bottom"); bottom.Size(60);
             AeroTheme.Button(bottom.transform, "Settings", () => _settingsOpen = true, AeroPalette.SkyDeep);
             AeroTheme.Button(bottom.transform, "Quit", Application.Quit, AeroPalette.Danger);
@@ -260,12 +261,12 @@ namespace Cubestruction.UI
 
         void BuildLobby()
         {
-            _lobby = Screen_("Lobby", new Vector2(1100, 960));
+            _lobby = Screen_("Lobby", new Vector2(1160, 1050));
             var col = Column(_lobby);
             Title(col, "Lobby", 56);
             _lobbyCode = AeroTheme.Label(col, "", 44, TextAnchor.MiddleCenter, AeroPalette.SkyDeep); _lobbyCode.fontStyle = FontStyle.Bold; _lobbyCode.Size(64);
             AeroTheme.Label(col, "Share the code — friends on Quest, PC, Mac and mobile can all join.", 20).Size(30);
-            var playersBg = AeroTheme.Image(col, "Players", AeroTheme.BarBg, new Color(1, 1, 1, 0.6f)); playersBg.Size(250);
+            var playersBg = AeroTheme.Image(col, "Players", AeroTheme.BarBg, new Color(1, 1, 1, 0.6f)); playersBg.Size(160);
             _lobbyPlayers = AeroTheme.Label(playersBg.transform, "", 26, TextAnchor.UpperLeft, AeroPalette.Ink, false);
             _lobbyPlayers.rectTransform.Fill(18); _lobbyPlayers.supportRichText = true;
 
@@ -273,15 +274,19 @@ namespace Cubestruction.UI
             _modeMining = AeroTheme.Button(modeRow.transform, "Mining", () => _lobbyMode = GameMode.Mining, AeroPalette.Lime);
             _modeSiege = AeroTheme.Button(modeRow.transform, "God Siege", () => _lobbyMode = GameMode.GodSiege, AeroPalette.SkyDeep);
             _modeTitan = AeroTheme.Button(modeRow.transform, "Titan Siege", () => _lobbyMode = GameMode.TitanSiege, AeroPalette.Danger);
+            _modeSuper = AeroTheme.Button(modeRow.transform, "SUPER!", () => _lobbyMode = GameMode.Super, new Color(1f, 0.5f, 0.15f), 26);
+            _modeSandbox = AeroTheme.Button(modeRow.transform, "Sandbox", () => _lobbyMode = GameMode.Sandbox, new Color(0.65f, 0.5f, 1f));
             var vote = AeroTheme.HRow(col, "Vote"); vote.Size(60);
             _voteRow = (RectTransform)vote.transform;
             AeroTheme.Label(vote.transform, "God Siege, I'll play as:", 22);
             _voteRaider = AeroTheme.Button(vote.transform, "Raider", () => { if (PlayerAvatar.Local) PlayerAvatar.Local.siegeVote.Value = 0; }, AeroPalette.Lime, 22);
             _voteCaster = AeroTheme.Button(vote.transform, "Minion Caster", () => { if (PlayerAvatar.Local) PlayerAvatar.Local.siegeVote.Value = 1; }, AeroPalette.Gold, 22);
-            _lobbyHint = AeroTheme.Label(col, "", 20); _lobbyHint.Size(64);
+            BuildFighterLobbyRows(col);
+            _lobbyHint = AeroTheme.Label(col, "", 19); _lobbyHint.Size(58);
 
             var row = AeroTheme.HRow(col, "Actions"); row.Size(76);
             _startBtn = AeroTheme.Button(row.transform, "Start!", () => MatchManager.Instance?.RequestStartRpc(_lobbyMode), AeroPalette.Lime, 32);
+            _lobbyLoadBtn = AeroTheme.Button(row.transform, "Load save", LoadFromLobby, AeroPalette.Gold);
             AeroTheme.Button(row.transform, "Settings", () => _settingsOpen = true, AeroPalette.SkyDeep);
             AeroTheme.Button(row.transform, "Leave", () => NetBootstrap.Instance?.Leave(), AeroPalette.Danger);
         }
@@ -330,13 +335,36 @@ namespace Cubestruction.UI
 
         void BuildPause()
         {
-            _pause = Screen_("Pause", new Vector2(600, 610));
-            var col = Column(_pause);
+            _pause = Screen_("Pause", new Vector2(640, 900));
+            var col = Column(_pause, 36, 12);
             Title(col, "Paused", 52);
-            AeroTheme.Button(col, "Resume", () => _pauseOpen = false, AeroPalette.Lime).Size(70);
-            AeroTheme.Button(col, "Settings", () => _settingsOpen = true, AeroPalette.SkyDeep).Size(70);
-            AeroTheme.Button(col, "Edit hotbar", () => { _hotbarEditOpen = true; _pickSig = -1; }, AeroPalette.Aqua).Size(70);
-            AeroTheme.Button(col, "Leave game", () => { _pauseOpen = false; NetBootstrap.Instance?.Leave(); }, AeroPalette.Danger).Size(70);
+            AeroTheme.Button(col, "Resume", () => _pauseOpen = false, AeroPalette.Lime).Size(66);
+            _pauseSave = (RectTransform)AeroTheme.Button(col, "Save game", () =>
+            {
+                var err = MatchManager.Instance != null ? MatchManager.Instance.ServerSave() : "Not in a game.";
+                if (err == null) Toast("Game saved! Continue it any time from the main menu.", AeroPalette.Grass);
+                else Toast(err, AeroPalette.Danger);
+            }, AeroPalette.Gold).Size(66).transform;
+            _pauseFighter = (RectTransform)AeroTheme.Cycle(col, "Fighter", Super.Roster.All.Select(f => $"{f.name} \"{f.title}\"").ToArray(),
+                () => Mathf.Clamp(GameSettings.Fighter, 0, Super.Roster.All.Length - 1), PickFighter).Size(66).transform;
+            _pauseHotbar = (RectTransform)AeroTheme.Button(col, "Edit hotbar", () => { _hotbarEditOpen = true; _pickSig = -1; }, AeroPalette.Aqua).Size(66).transform;
+            AeroTheme.Button(col, "Settings", () => _settingsOpen = true, AeroPalette.SkyDeep).Size(66);
+            _pauseLobby = (RectTransform)AeroTheme.Button(col, "Back to lobby", () => { _pauseOpen = false; MatchManager.Instance?.RequestLobbyRpc(); }, AeroPalette.SkyDeep).Size(66).transform;
+            AeroTheme.Button(col, "Main menu", () => { _pauseOpen = false; NetBootstrap.Instance?.Leave(); }, AeroPalette.Danger).Size(66);
+            _pauseNote = AeroTheme.Label(col, "", 18, TextAnchor.MiddleCenter, AeroPalette.Ink, false); _pauseNote.Size(48);
+        }
+
+        void UpdatePauseMenu(NetworkManager nm, MatchManager mm, PlayerAvatar me, bool miner)
+        {
+            bool host = nm != null && nm.IsServer;
+            bool savable = mm != null && SaveGame.CanSave(mm.mode.Value);
+            _pauseSave.gameObject.SetActive(host && savable);
+            _pauseLobby.gameObject.SetActive(host);
+            _pauseHotbar.gameObject.SetActive(miner);
+            _pauseFighter.gameObject.SetActive(mm != null && mm.mode.Value == GameMode.Sandbox);
+            bool solo = nm != null && nm.IsServer && nm.ConnectedClientsIds.Count <= 1;
+            _pauseNote.text = !host ? "Only the host can save or end the match." : !savable ? "God Siege and Titan Siege can't be saved." :
+                              solo ? "Game paused." + (SaveGame.Exists ? "  Saving replaces your last save." : "") : "Others keep playing while you're in this menu.";
         }
 
         // ------------------------------------------------------------------ HUD + hotbar
@@ -406,10 +434,11 @@ namespace Cubestruction.UI
             row.startCorner = GridLayoutGroup.Corner.LowerLeft; row.childAlignment = TextAnchor.LowerCenter;
 
             bool mobile = !IsVR && (Application.isMobilePlatform || _forceMobile);
+            BuildFightHud();
             if (mobile)
             {
-                _mobile = MobileControls.Create(_hud);
-                // touch zones go underneath the HUD so tapping a hotbar slot switches weapons
+                // on the HUD canvas, under both HUDs, so tapping a hotbar slot still switches weapons
+                _mobile = MobileControls.Create(_hudCanvas.transform);
                 _mobile.transform.SetAsFirstSibling();
             }
         }
@@ -652,11 +681,19 @@ namespace Cubestruction.UI
 
         // ================================================================== public API
 
+        public void TogglePause()
+        {
+            if (_screen != Screen.Hud) return;
+            _shopOpen = false;
+            _pauseOpen = !_pauseOpen;
+        }
+
         public void ToggleShop()
         {
             if (_screen != Screen.Hud) return;
             var me = PlayerAvatar.Local;
-            if (me == null || !Roles.CanShop(me.role.Value)) return;
+            if (me == null) return;
+            if (!Roles.CanShop(me.role.Value)) { _pauseOpen = !_pauseOpen; return; }
             _shopOpen = !_shopOpen;
             _shopSig = -1;
             if (_shopOpen) _pauseOpen = false;
@@ -765,6 +802,8 @@ namespace Cubestruction.UI
 
             // flat: Escape toggles pause / closes popups
             var kb = Keyboard.current;
+            var pad = Gamepad.current;
+            if (!IsVR && pad != null && pad.startButton.wasPressedThisFrame && _screen == Screen.Hud && !_settingsOpen && !_shopOpen) _pauseOpen = !_pauseOpen;
             if (!IsVR && kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 if (_settingsOpen) _settingsOpen = false;
@@ -774,6 +813,8 @@ namespace Cubestruction.UI
             }
 
             bool miner = me != null && Roles.UsesTools(me.role.Value);
+            bool fighter = me != null && me.role.Value == PlayerRole.Fighter;
+            UpdatePendingSolo(nm, mm);
             if (me == null || !Roles.CanShop(me.role.Value)) _shopOpen = false;
             _settings.gameObject.SetActive(_settingsOpen);
             bool showBase = !_settingsOpen;
@@ -786,8 +827,14 @@ namespace Cubestruction.UI
             _hotbarEdit.gameObject.SetActive(showBase && _hotbarEditOpen);
             if (_hotbarEditOpen) { RefreshHotbarEdit(me); _shopOpen = false; _pauseOpen = false; }
             _pause.gameObject.SetActive(showBase && _screen == Screen.Hud && _pauseOpen && !_shopOpen);
+            if (_pause.gameObject.activeSelf) UpdatePauseMenu(nm, mm, me, miner);
             _hud.gameObject.SetActive(_screen == Screen.Hud && miner);
-            if (_mobile) _mobile.gameObject.SetActive(_screen == Screen.Hud && miner && !BlocksGameplayInput && !StreakState.HideTouchControls);
+            _fightHud.gameObject.SetActive(_screen == Screen.Hud && fighter);
+            if (_mobile) _mobile.gameObject.SetActive(_screen == Screen.Hud && (miner || fighter) && !BlocksGameplayInput && !StreakState.HideTouchControls);
+            // solo host: the pause menu really pauses
+            bool solo = nm != null && nm.IsServer && nm.ConnectedClientsIds.Count <= 1;
+            float wantScale = solo && _screen == Screen.Hud && (_pauseOpen || _settingsOpen) ? 0f : 1f;
+            if (Time.timeScale != wantScale && (Time.timeScale == 0f || Time.timeScale == 1f)) Time.timeScale = wantScale;
             _sky.gameObject.SetActive(!IsVR && (_screen == Screen.Main || _screen == Screen.Connecting));
 
             switch (_screen)
@@ -802,6 +849,7 @@ namespace Cubestruction.UI
                 case Screen.End: UpdateEnd(nm, mm); break;
                 case Screen.Hud:
                     if (miner) UpdateHud(me, mm);
+                    if (fighter) UpdateFightHud(me);
                     if (_shopOpen && me != null) RefreshShop(me);
                     break;
             }
@@ -822,6 +870,7 @@ namespace Cubestruction.UI
         void SetScreen(Screen s)
         {
             _screen = s;
+            if (s != Screen.Hud) Time.timeScale = 1f;
             if (s != Screen.Hud) { _shopOpen = false; _pauseOpen = false; }
             _hotbarSig = -1; _shopSig = -1; _lastMoney = int.MinValue; _lastTimer = -1; _lastAlive = -1;
             _lobbyRefresh = 0;
@@ -836,6 +885,7 @@ namespace Cubestruction.UI
             _modeMining.transform.localScale = Vector3.one * (_lobbyMode == GameMode.Mining ? 1.06f : 0.94f);
             _modeSiege.transform.localScale = Vector3.one * (_lobbyMode == GameMode.GodSiege ? 1.06f : 0.94f);
             _modeTitan.transform.localScale = Vector3.one * (_lobbyMode == GameMode.TitanSiege ? 1.06f : 0.94f);
+            UpdateFighterLobby(host);
             // non-VR players vote for their God Siege role (the host's mode pick is synced only on Start, so always show it)
             var meL = PlayerAvatar.Local;
             bool flat = meL != null && meL.platform.Value != Platform.VR;
@@ -862,7 +912,7 @@ namespace Cubestruction.UI
                 sb.Append($"<color=#{col}>●</color>  {p.displayName.Value}   <i>{plat}</i>{(p.OwnerClientId == NetworkManager.ServerClientId ? "   (host)" : "")}<size=18>{vote}</size>\n");
             }
             _lobbyPlayers.text = sb.ToString();
-            _lobbyHint.text = _lobbyMode == GameMode.Mining
+            _lobbyHint.text = Roles.IsFighterMode(_lobbyMode) ? FighterLobbyHint() : _lobbyMode == GameMode.Mining
                 ? "Mining: everyone climbs and mines the cube together. The match ends when the last pixel is cleared."
                 : _lobbyMode == GameMode.GodSiege
                 ? (anyVR ? "God Siege: the VR player is a giant sun God defending the cube. Raiders dig at it on foot; one Minion Caster (picked from volunteers) sends unit waves. Break the Core to win."
@@ -879,6 +929,8 @@ namespace Cubestruction.UI
             if (_lobbyRefresh > 0) return;
             _lobbyRefresh = 1f;
             _endTitle.text = mm.resultText.Value.ToString();
+            var superBoard = SuperEndScoreboard(mm);
+            if (superBoard != null) { _endStats.supportRichText = true; _endStats.text = superBoard; return; }
             var tdEnd = Siege.TitanDirector.Instance;
             if (mm.mode.Value == GameMode.TitanSiege && tdEnd != null && tdEnd.scoreboard.Value.Length > 0)
             {

@@ -110,8 +110,11 @@ namespace Cubestruction.Voxels
         {
             int n = size.Value;
             if (shapeMode.Value == 1) cellSize = Siege.TitanMap.CellSize;
+            if (shapeMode.Value == 2) cellSize = Super.SuperArena.CellSize;
             Grid = shapeMode.Value == 1
                 ? new VoxelGrid(Siege.TitanMap.SizeX, hpScale.Value, Siege.TitanMap.Shape(), Siege.TitanMap.SizeY, Siege.TitanMap.SizeZ, Siege.TitanMap.HpMultiplier(Balance.Titan.wallHpMultiplier), Siege.TitanMap.IsTopProtected)
+                : shapeMode.Value == 2
+                ? new VoxelGrid(Super.SuperArena.SizeX, hpScale.Value, Super.SuperArena.Shape(), Super.SuperArena.SizeY, Super.SuperArena.SizeZ, null, Super.SuperArena.Anchored)
                 : new VoxelGrid(n, hpScale.Value);
             // local origin = bottom centre
             int cx = Mathf.CeilToInt(Grid.NX / (float)ChunkSize), cy = Mathf.CeilToInt(Grid.NY / (float)ChunkSize), cz = Mathf.CeilToInt(Grid.NZ / (float)ChunkSize);
@@ -518,6 +521,20 @@ namespace Cubestruction.Voxels
         void CellsRestoredRpc(int[] cells)
         {
             foreach (var idx in cells) { Grid.Restore(idx); MarkDirty(idx); }
+        }
+
+        /// <summary>Server, right after spawning: bring back a saved map (solid bits from <see cref="VoxelGrid.PackSolid"/>).
+        /// Clients that join afterwards ask for the full state as usual.</summary>
+        public void ServerRestoreSolid(byte[] packed)
+        {
+            if (!IsServer || Grid == null || packed == null || packed.Length != (Grid.Count + 7) / 8) return;
+            Grid.UnpackSolid(packed, 0);
+            // anything that was still waiting to fall when the game was saved falls now
+            _killed.Clear();
+            Grid.CollapseFloatingIslands(_killed);
+            foreach (var c in _chunks) if (c) _dirty.Add(c);
+            alive.Value = Grid.Alive;
+            coreAlive.Value = Grid.CoreAlive;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]

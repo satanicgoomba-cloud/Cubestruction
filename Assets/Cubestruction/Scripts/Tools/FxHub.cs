@@ -196,6 +196,8 @@ namespace Cubestruction.Tools
             if (lr) Destroy(lr.gameObject);
         }
 
+        public void BubbleLocal(Vector3 pos, float radius, Color c, float time) => StartCoroutine(Bubble(pos, radius, c, time));
+
         IEnumerator Bubble(Vector3 pos, float radius, Color c, float time)
         {
             var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -216,14 +218,14 @@ namespace Cubestruction.Tools
             Destroy(s);
         }
 
-        void Burst(Vector3 pos, int count, Color c)
+        public void Burst(Vector3 pos, int count, Color c)
         {
             if (!sparkBurst) return;
             var ep = new ParticleSystem.EmitParams { position = pos, startColor = c, applyShapeToPosition = true };
             sparkBurst.Emit(ep, count);
         }
 
-        static void Play(AudioClip clip, Vector3 pos, float vol, float pitch)
+        public static void Play(AudioClip clip, Vector3 pos, float vol, float pitch)
         {
             if (!clip) return;
             var go = new GameObject("sfx");

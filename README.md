@@ -12,6 +12,8 @@ Players on **Meta Quest (VR)**, **PC**, **Mac** and **Mobile** can play together
 | **Mining** (co-op, 1–6) | everyone | Clear every voxel. Inner layers pay more and are harder. The MVP is whoever cleared the most. |
 | **God Siege** (1 v many) | VR = **God**; everyone else votes **Raider** (on foot, with tools and the shop) or **Minion Caster** (one is picked at random from the volunteers) | The Caster sends ever-stronger waves of units (Age of War style) while Raiders dig; together they must destroy the Core. The God (a giant sun with shades and human hands) defends for 15 minutes with gesture skills and grabs, swats and squashes anything. Mana regen +15% per Raider. |
 | **Titan Siege** (always ≥ 5 v 1) | VR = **Titan** (no headset: an **AI Titan**); everyone else **defends**, bots fill the team to 5 | The Titan starts as a little Buddy at the foot of the first wall; when the prep time ends they bite their hand and lightning makes them a Titan. It smashes through three thick walls (Stone, Crystal, Magma) and the packed voxel towns between them. Defenders dig the mine wall on top of their wall for cannonballs, rockets and hidden guns, carry the ammo to cannons, artillery and rocket pods, and fire their RPG. Kill the Titan before the third wall falls. |
+| **SUPER!** (break the cube) | Everyone is an anime **fighter** (pick one of 6 in the lobby) | Break the Mining cube with your bare hands and anime moves. Breaking voxels fills your **Power** bar; **Power Up** to climb 5 tiers (Brawler, Fighter, Energy, Ascended, ULTIMATE), each unlocking a bigger move. The tough inner layers need the higher tiers. Your ultimate drops you back to Tier 4. Clear the cube to win. Lobby rule **Brawl** (free-for-all or teams) fights each other in a voxel arena instead: most KOs in 5 minutes. |
+| **Sandbox** | Fighters | Same as SUPER! with every move unlocked, infinite Power and short cooldowns. Brawl rules add training dummies. Also **Sandbox (solo)** on the main menu. |
 
 ![Buddies](Docs/previews/buddy.png)
 ![Tools](Docs/previews/tools.png)
@@ -104,6 +106,26 @@ take cannonballs, rocket pods take rockets), Use fires it. Your RPG fires the ro
 (webs stick to an invisible ceiling 20 voxels above the walls and last 3 s each) to get behind the Titan and hit its nape.
 The end screen shows everyone's damage, nape hits, ammo mined and loaded, and an MVP.
 
+**Fighter (SUPER! / Sandbox):** LMB punch chain · RMB kick (look up: launcher, in the air looking down: axe kick) ·
+C block (tap just before a hit: parry) · Q / E / R specials A / B / C (R = hold to charge the beam) · F Power Up · G ultimate
+(hold to charge the sun) · Space in the air: fly once your tier allows, Ctrl down. Gamepad: RT/LT punch/kick, RB block,
+X/Y/B specials, D-pad up/down Power Up/ultimate. Mobile: Punch, Kick, Block, A, B, C, ULT, POWER buttons. VR: real punches,
+fists up by your face to block, A / X / hold B specials, both grips + both triggers to Power Up, a fist above your head + its
+trigger for the ultimate, both triggers with your hands pointing down to fly.
+
+| Fighter | Style | A (Tier 2) | B (Tier 3) | C (Tier 4) | Ultimate (Tier 5) |
+|---|---|---|---|---|---|
+| Kenji "Blaze" | All-rounder, fire | Rising Flame | Blaze Palm | Phoenix Cannon (huge beam) | Sun Crash (giant sun) |
+| Rin "Volt" | Rushdown, lightning | Flash Step | Thunder Rush | Pierce Bolt (needle beam, 80 m) | Thousand Strikes |
+| Brom "Boulder" | Grappler, earth | Mountain Drop | Quake Stomp | Boulder Toss | Meteor Drop |
+| Yuki "Frost" | Zoner, ice | Ice Shards | Frost Dome | Blizzard Beam | Absolute Zero |
+| Kage "Shade" | Ninja, shadow | Shadow Step | Void Shuriken | Crescent Slash | Eclipse Cut |
+| Sora "Gale" | Aerial, wind (flies a tier early) | Cyclone Kick | Gust Wave | Hurricane | Eye of the Storm (stops time; a cyclone on the cube) |
+
+**Pause menu** (Esc, gamepad Start, VR Y, mobile Menu): Resume, **Save game** (host; Mining, SUPER! and Sandbox), Fighter
+(Sandbox), Edit hotbar, Settings, Back to lobby (host), Main menu. Playing alone, it really pauses. **Continue** on the main
+menu (or **Load save** in the lobby) brings the saved map, mode and your progress back. One save slot per device.
+
 **Commander (Siege):** WASD/drag to pan, wheel/pinch to zoom, Q/E rotate. Unit buttons at the bottom (hotkeys 1–6), pick one of 3 portals.
 
 ## Gameplay rules
@@ -170,6 +192,9 @@ The end screen shows everyone's damage, nape hits, ammo mined and loaded, and an
 | Sunburst Crate | 40,000 | 5 | Placed | 10 second countdown. Get very, very far away. |
 
 ### Killstreaks and supers
+
+Big moves are **bought once and recharge** (the hotbar shows the cooldown): Meteor Dive 40 s, Aqua Surge 50 s, Raptor
+Laptop 60 s, Echo Clones 75 s, Sun Orb 80 s, Titan Buddy 100 s, Heli-Gunner 120 s. Grenades, TNT, C4 and the Nuke are still ammo.
 
 | Item | Price | What it does |
 |---|---:|---|

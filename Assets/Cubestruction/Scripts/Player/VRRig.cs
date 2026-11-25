@@ -172,7 +172,8 @@ namespace Cubestruction.Player
             // tool use is ToolController's job; the rig only routes A/X (cycle) and B/Y (menu)
             if (Left.primary.WasPressedThisFrame()) _avatar.Tools.CycleHand(true);
             if (Right.primary.WasPressedThisFrame()) _avatar.Tools.CycleHand(false);
-            if (Left.secondary.WasPressedThisFrame() || Right.secondary.WasPressedThisFrame()) UI.GameMenus.Instance?.ToggleShop();
+            bool fighter = _avatar.role.Value == PlayerRole.Fighter;   // SUPER!: A / X / B are specials, Y is the menu
+            if (Left.secondary.WasPressedThisFrame() || (!fighter && Right.secondary.WasPressedThisFrame())) UI.GameMenus.Instance?.ToggleShop();
             bool tools = !Tools.StreakState.BlocksTools;   // a super mode may own the triggers
             _avatar.Tools.SetTriggers(tools && Left.trigger.IsPressed(), tools && Right.trigger.IsPressed());
 

@@ -14,7 +14,7 @@ namespace Cubestruction
     /// Results go to the player log as lines starting with "[AutoTest]"; the app quits at the end.
     /// </summary>
     [DefaultExecutionOrder(-40)]   // after FlatRig (-50), so our aim and trigger win; before ToolController
-    public class AutoTest : MonoBehaviour
+    public partial class AutoTest : MonoBehaviour
     {
         bool _holdUse, _pulseUse;
         bool _swing, _reel; Ray _swingAim; Vector3 _pump;
@@ -79,6 +79,14 @@ namespace Cubestruction
             {
                 yield return TitanBench();
                 Application.Quit(0);
+                yield break;
+            }
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-supertest") >= 0)
+            {
+                yield return Until(() => PlayerAvatar.Local != null, 10f, "player spawned");
+                yield return SuperTest();
+                Log(_failures == 0 ? "ALL PASSED" : _failures + " FAILED");
+                Application.Quit(_failures == 0 ? 0 : 1);
                 yield break;
             }
             MatchManager.Instance.ServerStartMatch(GameMode.Mining);
@@ -523,7 +531,7 @@ namespace Cubestruction
             // ---- Raptor Laptop: opens with 6 missiles, strikes blow up the cube, closing hands control back
             {
                 var lap = Balance.Tool("RaptorLaptop");
-                me.charges[lap.index] = 1;
+                me.ServerGrantReady(lap.index);
                 yield return null;
                 me.Tools.SelectTool(lap.index);
                 _holdUse = true; _pulseUse = true;
@@ -550,7 +558,7 @@ namespace Cubestruction
             // ---- Heli-Gunner: chopper arrives, you ride the door seat, the door gun shreds, then you land
             {
                 var hg = Balance.Tool("HeliGunner");
-                me.charges[hg.index] = 1;
+                me.ServerGrantReady(hg.index);
                 yield return null;
                 me.Tools.SelectTool(hg.index);
                 _holdUse = true; _pulseUse = true;
@@ -581,7 +589,7 @@ namespace Cubestruction
             System.Collections.IEnumerator UseStreak(string id)
             {
                 var st = Balance.Tool(id);
-                me.charges[st.index] = 1;
+                me.ServerGrantReady(st.index);
                 yield return null;
                 me.Tools.SelectTool(st.index);
                 yield return null;
@@ -1044,6 +1052,9 @@ namespace Cubestruction
                 mm.ServerEndMatch("autotest");
                 yield return new WaitForSeconds(1f);
             }
+
+            // ---- SUPER! + Sandbox
+            yield return SuperTest();
 
             // ---- hotbar: two rows of 8 at most, pinned picks first
             {

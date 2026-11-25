@@ -13,14 +13,30 @@ namespace Cubestruction.UI
     public class MobileControls : MonoBehaviour
     {
         RectTransform _stickBase, _stickKnob;
-        GameObject _swingBtn;
+        GameObject _swingBtn, _toolGroup, _fightGroup, _landBtn;
 
         void Update()
         {
-            // the Swing button only appears once you own the Zip Tether
             var me = PlayerAvatar.Local;
+            // SUPER!: fighter buttons instead of the tool ones
+            bool fighter = me != null && me.role.Value == PlayerRole.Fighter;
+            if (_fightGroup.activeSelf != fighter) { _fightGroup.SetActive(fighter); _toolGroup.SetActive(!fighter); ClearFight(); }
+            if (fighter)
+            {
+                var fc = Super.FighterController.Local;
+                bool flying = fc != null && fc.Flying;
+                if (_landBtn.activeSelf != flying) _landBtn.SetActive(flying);
+                return;
+            }
+            // the Swing button only appears once you own the Zip Tether
             bool show = me != null && me.Tools != null && me.Tools.HasTether;
             if (_swingBtn && _swingBtn.activeSelf != show) { _swingBtn.SetActive(show); if (!show) MobileInput.SwingHeld = false; }
+        }
+
+        static void ClearFight()
+        {
+            Super.FightInput.Block = false; Super.FightInput.Land = false;
+            for (int i = 0; i < 4; i++) Super.FightInput.Special[i] = false;
         }
         bool _sprint;
         Image _sprintImg;
@@ -63,17 +79,38 @@ namespace Cubestruction.UI
             look.onDrag = (_, delta) => MobileInput.LookDelta += delta;
 
             // ---- buttons (bottom-right cluster), above the look zone so they receive touches first
-            HoldButton(root, "Use", new Vector2(-150, 260), 150, v => MobileInput.UseHeld = v, AeroPalette.Danger);
+            var tools = AeroTheme.Rect(root, "ToolButtons").Fill(); _toolGroup = tools.gameObject;
+            HoldButton(tools, "Use", new Vector2(-150, 260), 150, v => MobileInput.UseHeld = v, AeroPalette.Danger);
             HoldButton(root, "Jump", new Vector2(-330, 150), 120, v => { if (v) MobileInput.Jump = true; MobileInput.JumpHeld = v; }, AeroPalette.Lime);
-            _swingBtn = HoldButton(root, "Swing", new Vector2(-500, 230), 120, v => MobileInput.SwingHeld = v, new Color(0.72f, 0.52f, 1f)).gameObject;
-            HoldButton(root, "Climb", new Vector2(-120, 90), 120, v => MobileInput.ClimbHeld = v, AeroPalette.Aqua);
+            _swingBtn = HoldButton(tools, "Swing", new Vector2(-500, 230), 120, v => MobileInput.SwingHeld = v, new Color(0.72f, 0.52f, 1f)).gameObject;
+            HoldButton(tools, "Climb", new Vector2(-120, 90), 120, v => MobileInput.ClimbHeld = v, AeroPalette.Aqua);
+
+            // ---- SUPER! fighter buttons
+            var fight = AeroTheme.Rect(root, "FightButtons").Fill(); _fightGroup = fight.gameObject;
+            HoldButton(fight, "Punch", new Vector2(-150, 260), 150, v => { if (v) Super.FightInput.Light = true; }, AeroPalette.Danger);
+            HoldButton(fight, "Kick", new Vector2(-120, 90), 120, v => { if (v) Super.FightInput.Heavy = true; }, new Color(1f, 0.55f, 0.2f));
+            HoldButton(fight, "Block", new Vector2(-500, 200), 120, v => Super.FightInput.Block = v, AeroPalette.SkyDeep);
+            var gold = AeroPalette.Gold;
+            HoldButton(fight, "A", new Vector2(-120, 440), 100, v => Super.FightInput.Special[0] = v, new Color(0.45f, 0.8f, 1f));
+            HoldButton(fight, "B", new Vector2(-240, 470), 100, v => Super.FightInput.Special[1] = v, new Color(0.55f, 0.6f, 1f));
+            HoldButton(fight, "C", new Vector2(-360, 500), 100, v => Super.FightInput.Special[2] = v, new Color(0.75f, 0.5f, 1f));
+            HoldButton(fight, "ULT", new Vector2(-480, 530), 110, v => Super.FightInput.Special[3] = v, gold);
+            HoldButton(fight, "POWER", new Vector2(-120, 600), 120, v => { if (v) Super.FightInput.PowerUp = true; }, new Color(1f, 0.85f, 0.35f));
+            _landBtn = HoldButton(fight, "Down", new Vector2(-500, 70), 100, v => Super.FightInput.Land = v, AeroPalette.Aqua).gameObject;
+            _landBtn.SetActive(false);
+            // pause menu (save, lobby, main menu): top centre for fighters, beside the money pill for miners
+            var pf = AeroTheme.Button(fight, "Menu", () => GameMenus.Instance?.TogglePause(), AeroPalette.SkyDeep, 24);
+            ((RectTransform)pf.transform).Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -24), new Vector2(150, 64), new Vector2(0.5f, 1));
+            var pt = AeroTheme.Button(tools, "Menu", () => GameMenus.Instance?.TogglePause(), AeroPalette.SkyDeep, 24);
+            ((RectTransform)pt.transform).Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(345, -30), new Vector2(130, 72), new Vector2(0, 1));
+            _fightGroup.SetActive(false);
             _sprintImg = HoldButton(root, "Sprint", new Vector2(-330, 320), 100, v =>
             {
                 if (!v) return;
                 _sprint = !_sprint; MobileInput.Sprint = _sprint;
                 _sprintImg.color = _sprint ? AeroPalette.Gold : AeroPalette.SkyDeep;
             }, AeroPalette.SkyDeep);
-            var shop = AeroTheme.Button(root, "Shop", () => GameMenus.Instance?.ToggleShop(), AeroPalette.Gold, 26);
+            var shop = AeroTheme.Button(tools, "Shop", () => GameMenus.Instance?.ToggleShop(), AeroPalette.Gold, 26);
             ((RectTransform)shop.transform).Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-110, -150), new Vector2(170, 70));
         }
 
@@ -93,6 +130,7 @@ namespace Cubestruction.UI
         void OnDisable()
         {
             MobileInput.Move = Vector2.zero; MobileInput.UseHeld = false; MobileInput.ClimbHeld = false;
+            ClearFight();
         }
     }
 }

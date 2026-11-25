@@ -1,5 +1,5 @@
 {
-  "notes": "damage is per affected cell per use (beams/drills: per tick). radiusCells uses linear falloff to 50% at the edge (explosives fall to 0%). price is per purchase; consumables add 'stack' charges per purchase. knockback is the impulse (m/s) applied to players at the blast centre; >= ragdollThreshold puts them into ragdoll. Tuned with Tools/balance_sim.py. Guns with speed > 0 fire physics bullets: gravity (x normal), bounces (ricochets; every impact damages), restitution (speed kept per bounce), spreadDeg (cone), bulletSize (visual m), lifeS; automatic = hold to fire. Bullet guns were tuned by hand (Nov 2026) for ~1.5-2x the old hitscan output; balance_sim.py doesn't model bounces yet.",
+  "notes": "damage is per affected cell per use (beams/drills: per tick). radiusCells uses linear falloff to 50% at the edge (explosives fall to 0%). price is per purchase; consumables add 'stack' charges per purchase. knockback is the impulse (m/s) applied to players at the blast centre; >= ragdollThreshold puts them into ragdoll. Tuned with Tools/balance_sim.py. Guns with speed > 0 fire physics bullets: gravity (x normal), bounces (ricochets; every impact damages), restitution (speed kept per bounce), spreadDeg (cone), bulletSize (visual m), lifeS; automatic = hold to fire. Bullet guns were tuned by hand (Nov 2026) for ~1.5-2x the old hitscan output; balance_sim.py doesn't model bounces yet. Streak items (big moves) are bought once and recharge: 'recharge' is the cooldown in seconds between uses.",
   "ragdollThreshold": 9,
   "tools": [
     {
@@ -1840,8 +1840,8 @@
       "name": "Raptor Laptop",
       "category": "Streak",
       "price": 12000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -1880,15 +1880,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 60
     },
     {
       "id": "HeliGunner",
       "name": "Heli-Gunner",
       "category": "Streak",
       "price": 30000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -1927,15 +1928,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 120
     },
     {
       "id": "MeteorDive",
       "name": "Meteor Dive",
       "category": "Streak",
       "price": 9000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -1974,15 +1976,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 40
     },
     {
       "id": "AquaSurge",
       "name": "Aqua Surge",
       "category": "Streak",
       "price": 15000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -2021,15 +2024,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 50
     },
     {
       "id": "EchoClones",
       "name": "Echo Clones",
       "category": "Streak",
       "price": 18000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -2068,15 +2072,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 75
     },
     {
       "id": "SunOrb",
       "name": "Sun Orb",
       "category": "Streak",
       "price": 20000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -2115,15 +2120,16 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 80
     },
     {
       "id": "TitanBuddy",
       "name": "Titan Buddy",
       "category": "Streak",
       "price": 25000,
-      "consumable": true,
-      "stack": 1,
+      "consumable": false,
+      "stack": 0,
       "damage": 0,
       "radiusCells": 0,
       "cooldown": 1,
@@ -2162,7 +2168,8 @@
       "carve": false,
       "explodeOnImpact": false,
       "returnS": 0,
-      "floatS": 0
+      "floatS": 0,
+      "recharge": 100
     },
     {
       "id": "RaptorMissile",
